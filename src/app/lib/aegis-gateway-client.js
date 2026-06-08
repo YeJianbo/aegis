@@ -67,8 +67,23 @@ async function setSessionMode (baseUrl, sessionId, mode) {
   })
 }
 
+async function closeSession (baseUrl, sessionId) {
+  return requestGateway(baseUrl, `/api/v1/sessions/${sessionId}`, { method: 'DELETE' })
+}
+
 async function listAuditEvents (baseUrl) {
   return requestGateway(baseUrl, '/api/v1/audit/events', { method: 'GET' })
+}
+
+async function getPolicyConfig (baseUrl) {
+  return requestGateway(baseUrl, '/api/v1/policy', { method: 'GET' })
+}
+
+async function setPolicyConfig (baseUrl, payload) {
+  return requestGateway(baseUrl, '/api/v1/policy', {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
 }
 
 async function decideApproval (baseUrl, approvalId, payload) {
@@ -92,6 +107,20 @@ async function completeTerminalCommand (baseUrl, commandId, payload) {
   })
 }
 
+async function claimFileTask (baseUrl) {
+  return requestGateway(baseUrl, '/api/v1/files/tasks/next', {
+    method: 'POST',
+    body: JSON.stringify({})
+  })
+}
+
+async function completeFileTask (baseUrl, taskId, payload) {
+  return requestGateway(baseUrl, `/api/v1/files/tasks/${taskId}/complete`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
 module.exports = {
   DEFAULT_BASE_URL,
   normalizeBaseUrl,
@@ -104,9 +133,14 @@ module.exports = {
   pauseSession,
   resumeSession,
   setSessionMode,
+  closeSession,
   listApprovals,
   decideApproval,
   listAuditEvents,
+  getPolicyConfig,
+  setPolicyConfig,
   claimTerminalCommand,
-  completeTerminalCommand
+  completeTerminalCommand,
+  claimFileTask,
+  completeFileTask
 }

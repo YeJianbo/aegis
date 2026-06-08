@@ -14,7 +14,12 @@ use std::convert::Infallible;
 use uuid::Uuid;
 
 use crate::command_flow::submit_command;
-use crate::models::{CommandStatus, HostSummary, RunCommandRequest, SessionSummary};
+use crate::file_flow::submit_file_operation;
+use crate::models::{
+    CommandStatus, FileOperationKind, FileOperationRequest, FileTaskStatus, HostSummary,
+    PolicyConfig, RunCommandRequest, SessionSummary, TerminalCommandStatus,
+    UpdatePolicyConfigRequest,
+};
 use crate::state::{AppState, new_session};
 
 #[derive(Debug, Deserialize)]
@@ -140,6 +145,10 @@ async fn call_tool(state: AppState, params: ToolCallParams) -> Result<Value, Jso
             let title = optional_string(&params.arguments, "title");
             json!(open_session_for_mcp(&state, host_id, title).await?)
         }
+        "close_session" => {
+            let session_id = required_string(&params.arguments, "session_id")?;
+            json!(close_session_for_mcp(&state, session_id).await?)
+        }
         "run_command" => {
             let session_id = required_string(&params.arguments, "session_id")?;
             let command = required_string(&params.arguments, "command")?;
@@ -162,6 +171,31 @@ async fn call_tool(state: AppState, params: ToolCallParams) -> Result<Value, Jso
             let session_id = required_string(&params.arguments, "session_id")?;
             json!(terminal_snapshot_for_mcp(&state, session_id).await?)
         }
+        "get_policy" => json!(get_policy_for_mcp(&state).await),
+        "update_policy" => {
+            json!(update_policy_for_mcp(&state, params.arguments).await?)
+        }
+        "file_list" => {
+            json!(file_operation_for_mcp(&state, params.arguments, FileOperationKind::List).await?)
+        }
+        "file_stat" => {
+            json!(file_operation_for_mcp(&state, params.arguments, FileOperationKind::Stat).await?)
+        }
+        "file_read" => json!(
+            file_operation_for_mcp(&state, params.arguments, FileOperationKind::ReadFile).await?
+        ),
+        "file_write" => json!(
+            file_operation_for_mcp(&state, params.arguments, FileOperationKind::WriteFile).await?
+        ),
+        "file_delete" => json!(
+            file_operation_for_mcp(&state, params.arguments, FileOperationKind::Delete).await?
+        ),
+        "file_upload" => json!(
+            file_operation_for_mcp(&state, params.arguments, FileOperationKind::Upload).await?
+        ),
+        "file_download" => json!(
+            file_operation_for_mcp(&state, params.arguments, FileOperationKind::Download).await?
+        ),
         _ => {
             return Err(JsonRpcError {
                 code: -32602,
@@ -194,6 +228,35 @@ async fn open_session_for_mcp(
     }
     let session = new_session(host_id, title);
     store.sessions.insert(session.id.clone(), session.clone());
+    Ok(session)
+}
+
+async fn close_session_for_mcp(
+    state: &AppState,
+    session_id: String,
+) -> Result<SessionSummary, JsonRpcError> {
+    let mut store = state.write().await;
+    let session = store
+        .sessions
+        .remove(&session_id)
+        .ok_or_else(|| invalid_params("session not found"))?;
+    store
+        .approvals
+        .retain(|_, approval| approval.session_id != session_id);
+    store.terminal_commands.retain(|_, task| {
+        !(task.session_id == session_id
+            && matches!(
+                task.status,
+                TerminalCommandStatus::Pending | TerminalCommandStatus::Running
+            ))
+    });
+    store.file_tasks.retain(|_, task| {
+        !(task.session_id == session_id
+            && matches!(
+                task.status,
+                FileTaskStatus::Pending | FileTaskStatus::Running
+            ))
+    });
     Ok(session)
 }
 
@@ -239,6 +302,64 @@ async fn run_command_for_mcp(
         audit_event_id: response.audit_event.id,
         terminal_command_id: response.terminal_command_id,
     })
+}
+
+async fn get_policy_for_mcp(state: &AppState) -> PolicyConfig {
+    state.read().await.policy.clone()
+}
+
+async fn update_policy_for_mcp(
+    state: &AppState,
+    arguments: Value,
+) -> Result<PolicyConfig, JsonRpcError> {
+    let payload: UpdatePolicyConfigRequest =
+        serde_json::from_value(arguments).map_err(|err| JsonRpcError {
+            code: -32602,
+            message: format!("invalid policy params: {err}"),
+        })?;
+    let mut store = state.write().await;
+    if let Some(mode) = payload.mode {
+        store.policy.mode = mode;
+    }
+    if let Some(whitelist) = payload.whitelist {
+        store.policy.whitelist = normalize_patterns(whitelist);
+    }
+    if let Some(blacklist) = payload.blacklist {
+        store.policy.blacklist = normalize_patterns(blacklist);
+    }
+    Ok(store.policy.clone())
+}
+
+async fn file_operation_for_mcp(
+    state: &AppState,
+    arguments: Value,
+    operation: FileOperationKind,
+) -> Result<Value, JsonRpcError> {
+    let session_id = required_string(&arguments, "session_id")?;
+    let actor_name = optional_string(&arguments, "actor_name");
+    let remote_path = optional_string(&arguments, "remote_path");
+    let local_path = optional_string(&arguments, "local_path");
+    let content = arguments
+        .get("content")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let response = submit_file_operation(
+        state.clone(),
+        FileOperationRequest {
+            session_id,
+            operation,
+            remote_path,
+            local_path,
+            content,
+            actor_name,
+        },
+    )
+    .await
+    .map_err(|err| JsonRpcError {
+        code: -32602,
+        message: err.message,
+    })?;
+    Ok(json!(response))
 }
 
 #[derive(Debug, Serialize)]
@@ -314,6 +435,14 @@ fn invalid_params(message: impl Into<String>) -> JsonRpcError {
         code: -32602,
         message: message.into(),
     }
+}
+
+fn normalize_patterns(patterns: Vec<String>) -> Vec<String> {
+    patterns
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .collect()
 }
 
 fn json_rpc_response(response: JsonRpcResponse, is_initialize: bool) -> Response {

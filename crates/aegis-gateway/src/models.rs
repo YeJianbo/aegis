@@ -113,6 +113,104 @@ pub struct CompleteTerminalCommandRequest {
     pub tab_id: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PolicyMode {
+    Guarded,
+    FullAllow,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyConfig {
+    pub mode: PolicyMode,
+    pub whitelist: Vec<String>,
+    pub blacklist: Vec<String>,
+}
+
+impl Default for PolicyConfig {
+    fn default() -> Self {
+        Self {
+            mode: PolicyMode::Guarded,
+            whitelist: Vec::new(),
+            blacklist: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdatePolicyConfigRequest {
+    pub mode: Option<PolicyMode>,
+    pub whitelist: Option<Vec<String>>,
+    pub blacklist: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileOperationKind {
+    List,
+    Stat,
+    ReadFile,
+    WriteFile,
+    Delete,
+    Upload,
+    Download,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileTaskStatus {
+    Pending,
+    Running,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileTask {
+    pub id: Uuid,
+    pub session_id: String,
+    pub host_id: String,
+    pub actor_name: String,
+    pub operation: FileOperationKind,
+    pub remote_path: Option<String>,
+    pub local_path: Option<String>,
+    pub content: Option<String>,
+    pub status: FileTaskStatus,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub tab_id: Option<String>,
+    pub audit_event_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileOperationRequest {
+    pub session_id: String,
+    pub operation: FileOperationKind,
+    pub remote_path: Option<String>,
+    pub local_path: Option<String>,
+    pub content: Option<String>,
+    pub actor_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FileOperationResponse {
+    pub status: FileTaskStatus,
+    pub task_id: Uuid,
+    pub session_id: String,
+    pub host_id: String,
+    pub operation: FileOperationKind,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub audit_event: AuditEvent,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CompleteFileTaskRequest {
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub tab_id: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ApprovalDecisionRequest {
     pub allow: bool,

@@ -2,21 +2,23 @@ use std::net::SocketAddr;
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use tokio::net::TcpListener;
 use tracing::info;
 
 mod command_flow;
+mod file_flow;
 mod handlers;
 mod mcp;
 mod models;
 mod state;
 
 use handlers::{
-    claim_terminal_command, classify, complete_terminal_command, decide_approval, health,
-    list_approvals, list_audit_events, list_hosts, list_sessions, open_session, pause_session,
-    resume_session, run_command, set_session_mode, sync_hosts,
+    claim_file_task, claim_terminal_command, classify, close_session, complete_file_task,
+    complete_terminal_command, decide_approval, get_policy_config, health, list_approvals,
+    list_audit_events, list_hosts, list_sessions, open_session, pause_session, resume_session,
+    run_command, run_file_operation, set_policy_config, set_session_mode, sync_hosts,
 };
 use mcp::{mcp_delete, mcp_endpoint, mcp_get};
 use state::AppState;
@@ -45,10 +47,17 @@ fn build_router(state: AppState) -> Router {
         .route("/api/v1/hosts", get(list_hosts))
         .route("/api/v1/hosts/sync", post(sync_hosts))
         .route("/api/v1/sessions", get(list_sessions).post(open_session))
+        .route("/api/v1/sessions/{session_id}", delete(close_session))
         .route("/api/v1/sessions/{session_id}/pause", post(pause_session))
         .route("/api/v1/sessions/{session_id}/resume", post(resume_session))
         .route("/api/v1/sessions/{session_id}/mode", post(set_session_mode))
         .route("/api/v1/commands", post(run_command))
+        .route("/api/v1/files", post(run_file_operation))
+        .route("/api/v1/files/tasks/next", post(claim_file_task))
+        .route(
+            "/api/v1/files/tasks/{task_id}/complete",
+            post(complete_file_task),
+        )
         .route(
             "/api/v1/terminal/commands/next",
             post(claim_terminal_command),
@@ -63,6 +72,10 @@ fn build_router(state: AppState) -> Router {
             post(decide_approval),
         )
         .route("/api/v1/policy/classify", post(classify))
+        .route(
+            "/api/v1/policy",
+            get(get_policy_config).put(set_policy_config),
+        )
         .route("/api/v1/audit/events", get(list_audit_events))
         .route("/mcp", get(mcp_get).post(mcp_endpoint).delete(mcp_delete))
         .with_state(state)

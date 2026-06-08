@@ -6,8 +6,9 @@ use uuid::Uuid;
 
 use crate::{
     models::{
-        ApprovalDecisionRequest, ApprovalRequest, CommandResponse, CommandStatus,
-        RunCommandRequest, SessionMode, SessionSummary, TerminalCommandStatus, TerminalCommandTask,
+        ApprovalDecisionRequest, ApprovalRequest, CommandResponse, CommandStatus, PolicyConfig,
+        PolicyMode, RunCommandRequest, SessionMode, SessionSummary, TerminalCommandStatus,
+        TerminalCommandTask,
     },
     state::{AppState, GatewayState},
 };
@@ -22,9 +23,16 @@ pub struct CommandFlowError {
 }
 
 impl CommandFlowError {
-    fn not_found(message: impl Into<String>) -> Self {
+    pub(crate) fn not_found(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_FOUND,
+            message: message.into(),
+        }
+    }
+
+    pub(crate) fn bad_request(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::BAD_REQUEST,
             message: message.into(),
         }
     }
@@ -37,11 +45,24 @@ pub async fn submit_command(
     let actor_name = payload.actor_name.unwrap_or_else(|| "Codex".to_owned());
     let assessment = classify_command(&payload.command);
     let mut store = state.write().await;
+    let decision = evaluate_policy(&payload.command, assessment.clone(), &store.policy);
     let session = store
         .sessions
         .get(&payload.session_id)
         .cloned()
         .ok_or_else(|| CommandFlowError::not_found("session not found"))?;
+
+    if let Some(reason) = decision.blocked_reason {
+        return Ok(blocked_response(
+            &mut store,
+            &session,
+            &actor_name,
+            &payload.command,
+            decision.assessment,
+            &reason,
+            &format!("blocked: {reason}"),
+        ));
+    }
 
     if session.paused {
         return Ok(blocked_response(
@@ -49,7 +70,7 @@ pub async fn submit_command(
             &session,
             &actor_name,
             &payload.command,
-            assessment,
+            decision.assessment,
             "Agent 已暂停，命令未执行",
             "blocked: agent paused",
         ));
@@ -61,19 +82,19 @@ pub async fn submit_command(
             &session,
             &actor_name,
             &payload.command,
-            assessment,
+            decision.assessment,
             "当前会话不允许 Agent 写入",
             "blocked: session is not agent-writable",
         ));
     }
 
-    if assessment.approval_required {
+    if decision.assessment.approval_required {
         let approval = ApprovalRequest {
             id: Uuid::new_v4(),
             session_id: session.id.clone(),
             actor_name: actor_name.clone(),
             command: payload.command.clone(),
-            assessment: assessment.clone(),
+            assessment: decision.assessment.clone(),
             status: ApprovalStatus::Pending,
             proposed_command: None,
         };
@@ -81,7 +102,7 @@ pub async fn submit_command(
             &session,
             &actor_name,
             &payload.command,
-            assessment.risk,
+            decision.assessment.risk,
             ApprovalStatus::Pending,
             Some("命令等待人工审批".to_owned()),
         );
@@ -90,7 +111,7 @@ pub async fn submit_command(
         return Ok(CommandResponse {
             status: CommandStatus::ApprovalPending,
             session_id: session.id,
-            assessment,
+            assessment: decision.assessment,
             approval_id: Some(approval.id),
             audit_event: event,
             output: None,
@@ -103,11 +124,11 @@ pub async fn submit_command(
         &session,
         actor_name,
         payload.command,
-        assessment.risk,
+        decision.assessment.risk,
         ApprovalStatus::NotRequired,
     );
     drop(store);
-    wait_for_terminal_command(state, task.id, session.id, assessment, None).await
+    wait_for_terminal_command(state, task.id, session.id, decision.assessment, None).await
 }
 
 pub async fn decide_approval_command(
@@ -131,7 +152,10 @@ pub async fn decide_approval_command(
         .modified_command
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| approval_snapshot.command.clone());
-    let assessment = classify_command(&command);
+    let assessment = {
+        let base = classify_command(&command);
+        evaluate_policy(&command, base, &store.policy).assessment
+    };
 
     if !payload.allow {
         if let Some(approval) = store.approvals.get_mut(&approval_id) {
@@ -179,6 +203,57 @@ pub async fn decide_approval_command(
     );
     drop(store);
     wait_for_terminal_command(state, task.id, session.id, assessment, Some(approval_id)).await
+}
+
+pub(crate) struct PolicyDecision {
+    pub assessment: CommandAssessment,
+    pub blocked_reason: Option<String>,
+}
+
+pub(crate) fn evaluate_policy(
+    command: &str,
+    mut assessment: CommandAssessment,
+    policy: &PolicyConfig,
+) -> PolicyDecision {
+    let normalized = command.to_ascii_lowercase();
+    if let Some(pattern) = find_pattern(&normalized, &policy.blacklist) {
+        assessment.risk = RiskLevel::Critical;
+        assessment.approval_required = false;
+        assessment.reason = format!("命中命令黑名单: {pattern}");
+        assessment.matched_rule = Some("policy-blacklist".to_owned());
+        return PolicyDecision {
+            assessment,
+            blocked_reason: Some(format!("command blacklisted: {pattern}")),
+        };
+    }
+
+    if let Some(pattern) = find_pattern(&normalized, &policy.whitelist) {
+        assessment.approval_required = false;
+        assessment.reason = format!("命中命令白名单: {pattern}");
+        assessment.matched_rule = Some("policy-whitelist".to_owned());
+        return PolicyDecision {
+            assessment,
+            blocked_reason: None,
+        };
+    }
+
+    if matches!(policy.mode, PolicyMode::FullAllow) {
+        assessment.approval_required = false;
+        assessment.reason = format!("完全允许模式：{}", assessment.reason);
+    }
+
+    PolicyDecision {
+        assessment,
+        blocked_reason: None,
+    }
+}
+
+fn find_pattern<'a>(normalized_command: &str, patterns: &'a [String]) -> Option<&'a str> {
+    patterns
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .find(|pattern| normalized_command.contains(&pattern.to_ascii_lowercase()))
 }
 
 fn blocked_response(

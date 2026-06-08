@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { auto } from 'manate/react'
 import {
   Alert,
@@ -8,6 +8,7 @@ import {
   Input,
   List,
   Modal,
+  Segmented,
   Space,
   Statistic,
   Tag,
@@ -35,15 +36,35 @@ function fmtCommand (command) {
   return command.length > 90 ? command.slice(0, 87) + '...' : command
 }
 
+function policyToDraft (policy) {
+  return {
+    mode: policy?.mode || 'guarded',
+    whitelist: (policy?.whitelist || []).join('\n'),
+    blacklist: (policy?.blacklist || []).join('\n')
+  }
+}
+
+function splitPatterns (value) {
+  return String(value || '')
+    .split(/[\n,]/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
 export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
   const { store } = window
   const status = store.aegisGatewayStatus
+  const [policyDraft, setPolicyDraft] = useState(policyToDraft(status.policy))
 
   useEffect(() => {
     if (visible || rightPanelTab === 'agent') {
       store.refreshAegisGatewayStatus()
     }
   }, [rightPanelTab, visible])
+
+  useEffect(() => {
+    setPolicyDraft(policyToDraft(status.policy))
+  }, [status.policy?.mode, status.policy?.whitelist?.join('\n'), status.policy?.blacklist?.join('\n')])
 
   if (!visible && rightPanelTab !== 'agent') {
     return null
@@ -78,6 +99,22 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
   }
   const handleSessionMode = (session, mode) => {
     store.setAegisSessionMode(session.id, mode).catch(store.onError)
+  }
+  const handleCloseSession = session => {
+    Modal.confirm({
+      title: 'Close Session',
+      content: session.title || session.id,
+      okText: 'Close',
+      okButtonProps: { danger: true },
+      onOk: () => store.closeAegisSession(session.id).catch(store.onError)
+    })
+  }
+  const handlePolicySave = () => {
+    store.setAegisPolicy({
+      mode: policyDraft.mode,
+      whitelist: splitPatterns(policyDraft.whitelist),
+      blacklist: splitPatterns(policyDraft.blacklist)
+    }).catch(store.onError)
   }
   const pendingApprovals = status.approvals.filter(item => item.status === 'pending')
   const latestAudit = status.auditEvents.slice(-8).reverse()
@@ -145,6 +182,47 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
         <Statistic title='Sessions' value={status.sessions.length} prefix={<SafetyCertificateOutlined />} />
         <Statistic title='Pending' value={pendingApprovals.length} />
       </div>
+
+      <section className='aegis-agent-section'>
+        <Flex justify='space-between' align='center' className='aegis-agent-section-title'>
+          <h3>Policy</h3>
+          <Button size='small' type='primary' onClick={handlePolicySave}>
+            Save
+          </Button>
+        </Flex>
+        <div className='aegis-agent-policy'>
+          <Segmented
+            block
+            size='small'
+            value={policyDraft.mode}
+            options={[
+              { label: 'Guarded', value: 'guarded' },
+              { label: 'Full allow', value: 'full_allow' }
+            ]}
+            onChange={mode => setPolicyDraft({ ...policyDraft, mode })}
+          />
+          <Input.TextArea
+            className='aegis-agent-policy-input'
+            value={policyDraft.whitelist}
+            placeholder='Whitelist patterns, one per line'
+            autoSize={{ minRows: 2, maxRows: 5 }}
+            onChange={event => setPolicyDraft({
+              ...policyDraft,
+              whitelist: event.target.value
+            })}
+          />
+          <Input.TextArea
+            className='aegis-agent-policy-input'
+            value={policyDraft.blacklist}
+            placeholder='Blacklist patterns, one per line'
+            autoSize={{ minRows: 2, maxRows: 5 }}
+            onChange={event => setPolicyDraft({
+              ...policyDraft,
+              blacklist: event.target.value
+            })}
+          />
+        </div>
+      </section>
 
       <section className='aegis-agent-section'>
         <h3>Approvals</h3>
@@ -250,6 +328,13 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
                           onClick={() => handleSessionMode(item, 'human_only')}
                         >
                           Human
+                        </Button>
+                        <Button
+                          size='small'
+                          danger
+                          onClick={() => handleCloseSession(item)}
+                        >
+                          Close
                         </Button>
                       </Space>
                     </div>

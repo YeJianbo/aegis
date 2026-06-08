@@ -33,17 +33,24 @@ http://127.0.0.1:17321
 ```text
 GET  /health
 GET  /api/v1/hosts
+POST /api/v1/hosts/sync
 GET  /api/v1/sessions
 POST /api/v1/sessions
+DELETE /api/v1/sessions/{session_id}
 POST /api/v1/sessions/{session_id}/pause
 POST /api/v1/sessions/{session_id}/resume
 POST /api/v1/sessions/{session_id}/mode
 POST /api/v1/commands
+POST /api/v1/files
+POST /api/v1/files/tasks/next
+POST /api/v1/files/tasks/{task_id}/complete
 POST /api/v1/terminal/commands/next
 POST /api/v1/terminal/commands/{command_id}/complete
 GET  /api/v1/approvals
 POST /api/v1/approvals/{approval_id}/decision
 POST /api/v1/policy/classify
+GET  /api/v1/policy
+PUT  /api/v1/policy
 GET  /api/v1/audit/events
 GET/POST/DELETE /mcp
 ```
@@ -61,9 +68,19 @@ http://127.0.0.1:17321/mcp
 ```text
 list_hosts
 open_session
+close_session
 run_command
 tail_log
 get_terminal_snapshot
+get_policy
+update_policy
+file_list
+file_stat
+file_read
+file_write
+file_delete
+file_upload
+file_download
 ```
 
 Codex 配置示例：
@@ -80,9 +97,19 @@ url = "http://127.0.0.1:17321/mcp"
 enabled_tools = [
   "list_hosts",
   "open_session",
+  "close_session",
   "run_command",
   "tail_log",
   "get_terminal_snapshot",
+  "get_policy",
+  "update_policy",
+  "file_list",
+  "file_stat",
+  "file_read",
+  "file_write",
+  "file_delete",
+  "file_upload",
+  "file_download",
 ]
 default_tools_approval_mode = "approve"
 ```
@@ -105,6 +132,15 @@ tools/call run_command
   "approval_required": true,
   "approval_id": "..."
 }
+```
+
+策略工具支持三层控制：
+
+```text
+mode=guarded     使用风险分级和审批
+mode=full_allow  默认不审批，但黑名单仍然硬阻断
+whitelist        命中后跳过审批
+blacklist        命中后直接阻断
 ```
 
 ## 桌面端接入
@@ -136,7 +172,7 @@ auditEvents
 AI 面板 -> Chat / Aegis
 ```
 
-切到 `Aegis` 后，面板会先把 electerm 中的 SSH bookmarks 同步到 Gateway，再刷新 Gateway 状态。因此 MCP 的 `list_hosts` 返回的是桌面端当前 SSH 书签，而不是固定 demo host。
+切到 `Aegis` 后，面板会先把 electerm 中的 SSH/FTP bookmarks 同步到 Gateway，再刷新 Gateway 状态。因此 MCP 的 `list_hosts` 返回的是桌面端当前书签，而不是固定 demo host。
 
 桌面端还会启动 Aegis terminal executor：
 
@@ -145,6 +181,14 @@ Gateway command queue -> electerm active/matched SSH tab -> terminal input -> id
 ```
 
 因此 `run_command` 不再是模拟输出。低风险命令会真实注入已连接或匹配书签的 SSH 终端；高危命令先进入审批队列，用户在 Aegis 面板中 Allow / Deny / Modify 后，批准的命令才会进入同一条真实终端执行链路。
+
+桌面端同时启动 Aegis file executor：
+
+```text
+Gateway file task queue -> matched SSH/SFTP/FTP tab -> electerm SFTP API -> Gateway audit
+```
+
+文件工具走 electerm 已有 SFTP/FTP 能力，支持目录列表、状态读取、文本读取、文本写入、删除、本地上传和下载。写操作在 `agent_read_only` 下会被 Gateway 阻断，`human_only` 或 pause 状态下所有 Agent 文件操作都会被阻断。
 
 ## MVP 路线
 

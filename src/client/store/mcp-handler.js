@@ -153,6 +153,9 @@ export default Store => {
         case 'sftp_read_file':
           result = await store.mcpSftpReadFile(args)
           break
+        case 'sftp_write_file':
+          result = await store.mcpSftpWriteFile(args)
+          break
 
         // File transfer operations
         case 'sftp_upload':
@@ -945,7 +948,31 @@ export default Store => {
       throw new Error('remotePath is required')
     }
     const content = await sftp.readFile(remotePath)
-    return { tabId, host: tab.host, path: remotePath, content }
+    return {
+      tabId,
+      host: tab.host,
+      path: remotePath,
+      content: typeof content === 'string' ? content : String(content)
+    }
+  }
+
+  Store.prototype.mcpSftpWriteFile = async function (args) {
+    const { sftp, tab, tabId } = window.store.mcpGetSshSftpRef(args.tabId)
+    const remotePath = args.remotePath
+    if (!remotePath) {
+      throw new Error('remotePath is required')
+    }
+    if (args.content === undefined || args.content === null) {
+      throw new Error('content is required')
+    }
+    await sftp.writeFile(remotePath, String(args.content), args.mode)
+    return {
+      success: true,
+      tabId,
+      host: tab.host,
+      path: remotePath,
+      bytes: String(args.content).length
+    }
   }
 
   Store.prototype.mcpSftpDel = async function (args) {

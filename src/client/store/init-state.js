@@ -127,7 +127,12 @@ export default () => {
       hosts: [],
       sessions: [],
       approvals: [],
-      auditEvents: []
+      auditEvents: [],
+      policy: {
+        mode: 'guarded',
+        whitelist: [],
+        blacklist: []
+      }
     },
 
     // for settings related

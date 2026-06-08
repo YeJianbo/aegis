@@ -4,7 +4,8 @@ use aegis_audit::AuditEvent;
 use tokio::sync::RwLock;
 
 use crate::models::{
-    ApprovalRequest, HostSummary, SessionMode, SessionSummary, TerminalCommandTask,
+    ApprovalRequest, FileTask, HostSummary, PolicyConfig, SessionMode, SessionSummary,
+    TerminalCommandTask,
 };
 
 #[derive(Clone)]
@@ -18,7 +19,9 @@ pub struct GatewayState {
     pub sessions: HashMap<String, SessionSummary>,
     pub approvals: HashMap<uuid::Uuid, ApprovalRequest>,
     pub terminal_commands: HashMap<uuid::Uuid, TerminalCommandTask>,
+    pub file_tasks: HashMap<uuid::Uuid, FileTask>,
     pub audit_events: Vec<AuditEvent>,
+    pub policy: PolicyConfig,
 }
 
 impl Default for AppState {
@@ -40,7 +43,9 @@ impl Default for AppState {
                 sessions: HashMap::new(),
                 approvals: HashMap::new(),
                 terminal_commands: HashMap::new(),
+                file_tasks: HashMap::new(),
                 audit_events: Vec::new(),
+                policy: PolicyConfig::default(),
             })),
         }
     }

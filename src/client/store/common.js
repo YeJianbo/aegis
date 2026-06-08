@@ -10,7 +10,8 @@ import {
   rightSidebarWidthKey,
   addPanelWidthLsKey,
   dismissDelKeyTipLsKey,
-  connectionMap
+  connectionMap,
+  paneMap
 } from '../common/constants'
 import * as ls from '../common/safe-local-storage'
 import { refs, refsStatic } from '../components/common/ref'
@@ -34,17 +35,51 @@ function escapeRegExp (value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+const aegisAnsi = {
+  reset: '\\033[0m',
+  bold: '\\033[1m',
+  dim: '\\033[2m',
+  fgCyan: '\\033[36m',
+  fgGreen: '\\033[32m',
+  fgRed: '\\033[31m',
+  bgMagenta: '\\033[45;97m',
+  bgGreen: '\\033[42;30m',
+  bgRed: '\\033[41;97m',
+  bgYellow: '\\033[43;30m',
+  bgOrange: '\\033[48;5;208;30m'
+}
+
 function isUsableSshTab (tab) {
   return tab && tab.type === 'ssh' && tab.host
 }
 
-function tabMatchesAegisHost (tab, hostId, host) {
-  if (!isUsableSshTab(tab)) return false
+function isUsableAegisFileTab (tab) {
+  return tab && (tab.type === 'ssh' || tab.type === 'ftp') && tab.host
+}
+
+function tabMatchesAegisHost (tab, hostId, host, isUsable = isUsableSshTab) {
+  if (!isUsable(tab)) return false
   if (tab.srcId && tab.srcId === hostId) return true
   if (tab.id && tab.id === hostId) return true
   if (!host) return false
   const address = String(host.address || '').split(':')[0]
   return !!address && tab.host === address
+}
+
+function activateAegisTab (store, tab) {
+  store.activeTabId = tab.id
+  if (tab.batch !== undefined) {
+    store[`activeTabId${tab.batch}`] = tab.id
+    store.currentLayoutBatch = tab.batch
+  }
+}
+
+function aegisRiskBadge (risk) {
+  const label = String(risk || 'low').toUpperCase()
+  if (risk === 'critical') return `${aegisAnsi.bgRed} ${label} ${aegisAnsi.reset}`
+  if (risk === 'high') return `${aegisAnsi.bgOrange} ${label} ${aegisAnsi.reset}`
+  if (risk === 'medium') return `${aegisAnsi.bgYellow} ${label} ${aegisAnsi.reset}`
+  return `${aegisAnsi.bgGreen} ${label} ${aegisAnsi.reset}`
 }
 
 export default Store => {
@@ -275,11 +310,13 @@ export default Store => {
       const [
         sessions,
         approvals,
-        auditEvents
+        auditEvents,
+        policy
       ] = await Promise.all([
         window.pre.runGlobalAsync('aegisGatewaySessions'),
         window.pre.runGlobalAsync('aegisGatewayApprovals'),
-        window.pre.runGlobalAsync('aegisGatewayAuditEvents')
+        window.pre.runGlobalAsync('aegisGatewayAuditEvents'),
+        window.pre.runGlobalAsync('aegisGatewayPolicy')
       ])
       store.aegisGatewayStatus = {
         loading: false,
@@ -289,9 +326,11 @@ export default Store => {
         hosts: syncedHosts,
         sessions,
         approvals,
-        auditEvents
+        auditEvents,
+        policy
       }
       store.startAegisTerminalExecutor()
+      store.startAegisFileExecutor()
     } catch (err) {
       store.aegisGatewayStatus = {
         ...store.aegisGatewayStatus,
@@ -317,14 +356,17 @@ export default Store => {
             'aegisGatewaySyncHosts',
             store.buildAegisHostsFromBookmarks()
           )
+          const policy = await window.pre.runGlobalAsync('aegisGatewayPolicy')
           store.aegisGatewayStatus = {
             ...store.aegisGatewayStatus,
             online: true,
             error: '',
             health,
-            hosts: syncedHosts
+            hosts: syncedHosts,
+            policy
           }
           store.startAegisTerminalExecutor()
+          store.startAegisFileExecutor()
         } catch (_) {
           store.aegisGatewayStatus = {
             ...store.aegisGatewayStatus,
@@ -341,10 +383,10 @@ export default Store => {
   Store.prototype.buildAegisHostsFromBookmarks = function () {
     const { bookmarks } = window.store
     return bookmarks
-      .filter(bookmark => bookmark.type === 'ssh' && bookmark.host)
+      .filter(bookmark => (bookmark.type === 'ssh' || bookmark.type === 'ftp') && bookmark.host)
       .map(bookmark => {
         const tags = [
-          'ssh',
+          bookmark.type,
           bookmark.username ? `user:${bookmark.username}` : '',
           bookmark.port ? `port:${bookmark.port}` : ''
         ].filter(Boolean)
@@ -389,17 +431,172 @@ export default Store => {
     loop()
   }
 
+  Store.prototype.startAegisFileExecutor = function () {
+    const { store } = window
+    if (store._aegisFileExecutorRunning) {
+      return
+    }
+    store._aegisFileExecutorRunning = true
+
+    const loop = async () => {
+      while (store._aegisFileExecutorRunning) {
+        try {
+          const task = await window.pre.runGlobalAsync('aegisGatewayClaimFileTask')
+          if (!task) {
+            await sleep(1000)
+            continue
+          }
+          await store.executeAegisFileTask(task)
+          if (store.rightPanelTab === 'agent') {
+            store.refreshAegisGatewayStatus().catch(() => {})
+          }
+        } catch (err) {
+          store.aegisGatewayStatus = {
+            ...store.aegisGatewayStatus,
+            fileExecutorError: err.message || String(err)
+          }
+          await sleep(2000)
+        }
+      }
+    }
+
+    loop()
+  }
+
+  Store.prototype.executeAegisFileTask = async function (task) {
+    const { store } = window
+    let tabId = ''
+    try {
+      tabId = await store.resolveAegisFileTab(task.host_id)
+      await store.ensureAegisSftpReady(tabId)
+
+      const args = {
+        tabId,
+        remotePath: task.remote_path,
+        localPath: task.local_path,
+        content: task.content
+      }
+      let result
+      switch (task.operation) {
+        case 'list':
+          result = await store.mcpSftpList(args)
+          break
+        case 'stat':
+          result = await store.mcpSftpStat(args)
+          break
+        case 'read_file':
+          result = await store.mcpSftpReadFile(args)
+          break
+        case 'write_file':
+          result = await store.mcpSftpWriteFile(args)
+          break
+        case 'delete':
+          result = await store.mcpSftpDel(args)
+          break
+        case 'upload':
+          result = await store.mcpSftpUpload(args)
+          break
+        case 'download':
+          result = await store.mcpSftpDownload(args)
+          break
+        default:
+          throw new Error(`Unsupported Aegis file operation: ${task.operation}`)
+      }
+
+      await store.completeAegisFileTask(task.id, {
+        result,
+        tab_id: tabId
+      })
+    } catch (err) {
+      await store.completeAegisFileTask(task.id, {
+        error: err.message || String(err),
+        tab_id: tabId || null
+      })
+    }
+  }
+
+  Store.prototype.resolveAegisFileTab = async function (hostId) {
+    const { store } = window
+    const host = store.aegisGatewayStatus.hosts.find(item => item.id === hostId)
+    const current = store.currentTab
+    if (tabMatchesAegisHost(current, hostId, host, isUsableAegisFileTab)) {
+      return store.activeTabId
+    }
+
+    const existing = store.tabs.find(tab => (
+      tabMatchesAegisHost(tab, hostId, host, isUsableAegisFileTab)
+    ))
+    if (existing) {
+      activateAegisTab(store, existing)
+      return existing.id
+    }
+
+    const bookmark = store.bookmarks.find(item => item.id === hostId)
+    if (!bookmark) {
+      throw new Error(`No connected SFTP/FTP tab or bookmark for host: ${hostId}`)
+    }
+    if (bookmark.type !== 'ssh' && bookmark.type !== 'ftp') {
+      throw new Error(`Host ${hostId} is not an SSH/FTP bookmark`)
+    }
+    store.onSelectBookmark(hostId)
+    await sleep(2500)
+    const opened = store.tabs.find(tab => tabMatchesAegisHost(tab, hostId, host, isUsableAegisFileTab))
+    if (!opened && !tabMatchesAegisHost(store.currentTab, hostId, host, isUsableAegisFileTab)) {
+      throw new Error(`Failed to open SFTP/FTP bookmark for host: ${hostId}`)
+    }
+    return opened ? opened.id : store.activeTabId
+  }
+
+  Store.prototype.ensureAegisSftpReady = async function (tabId) {
+    const { store } = window
+    const tab = store.tabs.find(item => item.id === tabId)
+    if (!tab) {
+      throw new Error(`Tab not found: ${tabId}`)
+    }
+
+    activateAegisTab(store, tab)
+    if (tab.type === 'ssh' && tab.pane !== paneMap.fileManager) {
+      store.updateTab(tabId, { pane: paneMap.fileManager })
+      store.triggerResize?.()
+    }
+
+    const started = Date.now()
+    while (Date.now() - started < 12000) {
+      const sftpEntry = refs.get('sftp-' + tabId)
+      if (sftpEntry?.sftp) {
+        return sftpEntry
+      }
+      await sleep(400)
+    }
+    throw new Error(`SFTP not initialized for tab "${tabId}". Open the SFTP panel first.`)
+  }
+
+  Store.prototype.completeAegisFileTask = async function (taskId, payload) {
+    await window.pre.runGlobalAsync('aegisGatewayCompleteFileTask', taskId, payload)
+  }
+
   Store.prototype.executeAegisTerminalCommand = async function (task) {
     const { store } = window
     let tabId = ''
     try {
       tabId = await store.resolveAegisTerminalTab(task.host_id)
       const sentinel = `__AEGIS_EXIT_${String(task.id).replace(/-/g, '_')}__`
-      const marker = `[Agent: ${task.actor_name || 'Aegis'}] ${task.command}`
+      const markerFormat = [
+        `${aegisAnsi.bgMagenta} Aegis Agent ${aegisAnsi.reset}`,
+        `${aegisRiskBadge(task.risk)} actor=%s`,
+        `${aegisAnsi.fgCyan}${aegisAnsi.bold}$ %s${aegisAnsi.reset}\\n`
+      ].join(' ')
+      const successFormat = `${aegisAnsi.bgGreen} Aegis Agent completed ${aegisAnsi.reset} ${aegisAnsi.fgGreen}exit=%s${aegisAnsi.reset}\\n`
+      const failedFormat = `${aegisAnsi.bgRed} Aegis Agent failed ${aegisAnsi.reset} ${aegisAnsi.fgRed}exit=%s${aegisAnsi.reset}\\n`
+      const sentinelFormat = `${aegisAnsi.dim}%s=%s${aegisAnsi.reset}\\n`
       const wrapped = [
-        `printf '%s\\n' ${quotePosixSingle(marker)}`,
+        'stty -echo 2>/dev/null || true',
+        `printf ${quotePosixSingle(markerFormat)} ${quotePosixSingle(task.actor_name || 'Aegis')} ${quotePosixSingle(task.command)}`,
         task.command,
-        `printf '%s=%s\\n' ${quotePosixSingle(sentinel)} "$?"`
+        '__aegis_exit=$?',
+        `if [ "$__aegis_exit" -eq 0 ]; then printf ${quotePosixSingle(successFormat)} "$__aegis_exit"; else printf ${quotePosixSingle(failedFormat)} "$__aegis_exit"; fi`,
+        `printf ${quotePosixSingle(sentinelFormat)} ${quotePosixSingle(sentinel)} "$__aegis_exit"`,
+        'stty echo 2>/dev/null || true'
       ].join('\n')
 
       store.mcpSendTerminalCommand({
@@ -442,10 +639,7 @@ export default Store => {
 
     const existing = store.tabs.find(tab => tabMatchesAegisHost(tab, hostId, host))
     if (existing) {
-      store.activeTabId = existing.id
-      if (existing.batch !== undefined) {
-        store[`activeTabId${existing.batch}`] = existing.id
-      }
+      activateAegisTab(store, existing)
       return existing.id
     }
 
@@ -456,6 +650,9 @@ export default Store => {
     const bookmark = store.bookmarks.find(item => item.id === hostId)
     if (!bookmark) {
       throw new Error(`No connected SSH terminal or bookmark for host: ${hostId}`)
+    }
+    if (bookmark.type !== 'ssh') {
+      throw new Error(`Host ${hostId} is not an SSH bookmark and cannot run terminal commands`)
     }
     store.onSelectBookmark(hostId)
     await sleep(2500)
@@ -472,6 +669,8 @@ export default Store => {
     const cleaned = output
       .split('\n')
       .filter(line => !line.includes(`${sentinel}=`))
+      .filter(line => !line.includes('stty -echo 2>/dev/null || true'))
+      .filter(line => !line.includes('stty echo 2>/dev/null || true'))
       .join('\n')
       .trimEnd()
     return {
@@ -501,6 +700,16 @@ export default Store => {
 
   Store.prototype.setAegisSessionMode = async function (sessionId, mode) {
     await window.pre.runGlobalAsync('aegisGatewaySetSessionMode', sessionId, mode)
+    await window.store.refreshAegisGatewayStatus()
+  }
+
+  Store.prototype.closeAegisSession = async function (sessionId) {
+    await window.pre.runGlobalAsync('aegisGatewayCloseSession', sessionId)
+    await window.store.refreshAegisGatewayStatus()
+  }
+
+  Store.prototype.setAegisPolicy = async function (payload) {
+    await window.pre.runGlobalAsync('aegisGatewaySetPolicy', payload)
     await window.store.refreshAegisGatewayStatus()
   }
 
