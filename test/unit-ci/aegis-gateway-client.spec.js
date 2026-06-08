@@ -4,7 +4,8 @@ const assert = require('node:assert/strict')
 const {
   DEFAULT_BASE_URL,
   normalizeBaseUrl,
-  requestGateway
+  requestGateway,
+  syncHosts
 } = require('../../src/app/lib/aegis-gateway-client')
 
 test('normalizes gateway base url', () => {
@@ -18,4 +19,5 @@ test('uses default gateway base url for empty input', () => {
 
 test('exports request helper for renderer ipc wrappers', () => {
   assert.equal(typeof requestGateway, 'function')
+  assert.equal(typeof syncHosts, 'function')
 })

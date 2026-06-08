@@ -41,6 +41,13 @@ async function listHosts (baseUrl) {
   return requestGateway(baseUrl, '/api/v1/hosts', { method: 'GET' })
 }
 
+async function syncHosts (baseUrl, hosts) {
+  return requestGateway(baseUrl, '/api/v1/hosts/sync', {
+    method: 'POST',
+    body: JSON.stringify({ hosts })
+  })
+}
+
 async function listSessions (baseUrl) {
   return requestGateway(baseUrl, '/api/v1/sessions', { method: 'GET' })
 }
@@ -56,6 +63,7 @@ module.exports = {
   getHealth,
   classifyCommand,
   listHosts,
+  syncHosts,
   listSessions,
   listApprovals,
   listAuditEvents

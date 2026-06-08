@@ -27,7 +27,6 @@ import ConnectionHoppingWarning from './connection-hopping-warnning'
 import SshConfigLoadNotify from '../ssh-config/ssh-config-load-notify'
 import LoadSshConfigs from '../ssh-config/load-ssh-configs'
 import AIChat from '../ai/ai-chat-entry'
-import AegisAgentPanel from '../aegis-agent/aegis-agent-panel'
 import AIConfigModal from '../ai/ai-config-modal'
 import Opacity from '../common/opacity'
 import MoveItemModal from '../tree-list/move-item-modal'
@@ -37,7 +36,6 @@ import BookmarkFromHistoryModal from '../bookmark-form/bookmark-from-history-mod
 import AutoSync from '../setting-sync/auto-sync'
 import BatchOpRunner from '../batch-op/batch-op-runner'
 import UnixTimestampTooltip from '../terminal/unix-timestamp-tooltip'
-import { SafetyCertificateOutlined } from '@ant-design/icons'
 import { pick } from 'lodash-es'
 import deepCopy from 'json-deep-copy'
 import './wrapper.styl'
@@ -285,16 +283,8 @@ export default auto(function Index (props) {
         <InfoModal {...infoModalProps} />
         <RightSidePanel {...rightPanelProps}>
           <AIChat {...aiChatProps} />
-          <AegisAgentPanel rightPanelTab={rightPanelTab} />
           <TerminalInfo key={store.activeTabId} {...terminalInfoProps} />
         </RightSidePanel>
-        <button
-          className='aegis-agent-fab'
-          title='Aegis Agent'
-          onClick={store.handleOpenAegisPanel}
-        >
-          <SafetyCertificateOutlined />
-        </button>
         <SshConfigLoadNotify {...sshConfigProps} />
         <LoadSshConfigs
           showSshConfigModal={store.showSshConfigModal}

@@ -11,7 +11,7 @@ pub enum SessionMode {
     HumanOnly,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostSummary {
     pub id: String,
     pub name: String,
@@ -62,6 +62,11 @@ pub struct ApprovalRequest {
 pub struct OpenSessionRequest {
     pub host_id: String,
     pub title: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SyncHostsRequest {
+    pub hosts: Vec<HostSummary>,
 }
 
 #[derive(Debug, Deserialize)]

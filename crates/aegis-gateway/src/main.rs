@@ -15,6 +15,7 @@ mod state;
 use handlers::{
     classify, decide_approval, health, list_approvals, list_audit_events, list_hosts,
     list_sessions, open_session, pause_session, resume_session, run_command, set_session_mode,
+    sync_hosts,
 };
 use mcp::mcp_endpoint;
 use state::AppState;
@@ -41,6 +42,7 @@ fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/api/v1/hosts", get(list_hosts))
+        .route("/api/v1/hosts/sync", post(sync_hosts))
         .route("/api/v1/sessions", get(list_sessions).post(open_session))
         .route("/api/v1/sessions/{session_id}/pause", post(pause_session))
         .route("/api/v1/sessions/{session_id}/resume", post(resume_session))

@@ -12,6 +12,7 @@ use crate::{
     models::{
         ApprovalDecisionRequest, ApprovalRequest, CommandResponse, CommandStatus, HostSummary,
         OpenSessionRequest, RunCommandRequest, SessionSummary, SetSessionModeRequest,
+        SyncHostsRequest,
     },
     state::{AppState, new_session},
 };
@@ -47,6 +48,20 @@ pub async fn classify(Json(payload): Json<ClassifyCommandRequest>) -> Json<Comma
 
 pub async fn list_hosts(State(state): State<AppState>) -> Json<Vec<HostSummary>> {
     Json(state.read().await.hosts.values().cloned().collect())
+}
+
+pub async fn sync_hosts(
+    State(state): State<AppState>,
+    Json(payload): Json<SyncHostsRequest>,
+) -> Json<Vec<HostSummary>> {
+    let mut store = state.write().await;
+    store.hosts = payload
+        .hosts
+        .into_iter()
+        .filter(|host| !host.id.trim().is_empty() && !host.address.trim().is_empty())
+        .map(|host| (host.id.clone(), host))
+        .collect();
+    Json(store.hosts.values().cloned().collect())
 }
 
 pub async fn open_session(

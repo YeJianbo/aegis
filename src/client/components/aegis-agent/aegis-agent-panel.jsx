@@ -33,17 +33,17 @@ function fmtCommand (command) {
   return command.length > 90 ? command.slice(0, 87) + '...' : command
 }
 
-export default auto(function AegisAgentPanel ({ rightPanelTab }) {
+export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
   const { store } = window
   const status = store.aegisGatewayStatus
 
   useEffect(() => {
-    if (rightPanelTab === 'agent') {
+    if (visible || rightPanelTab === 'agent') {
       store.refreshAegisGatewayStatus()
     }
-  }, [rightPanelTab])
+  }, [rightPanelTab, visible])
 
-  if (rightPanelTab !== 'agent') {
+  if (!visible && rightPanelTab !== 'agent') {
     return null
   }
 
@@ -92,6 +92,19 @@ export default auto(function AegisAgentPanel ({ rightPanelTab }) {
               showIcon
               message='Gateway is not reachable'
               description='Start the Aegis Gateway widget, then refresh this panel.'
+            />
+            )
+          : null
+      }
+      {
+        !status.error && status.hosts.length === 0
+          ? (
+            <Alert
+              className='aegis-agent-alert'
+              type='info'
+              showIcon
+              message='No SSH bookmarks synced'
+              description='Create or import SSH bookmarks in electerm, then refresh this panel.'
             />
             )
           : null

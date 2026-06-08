@@ -114,6 +114,14 @@ approvals
 auditEvents
 ```
 
+桌面端主入口已集成到 AI 面板：
+
+```text
+AI 面板 -> Chat / Aegis
+```
+
+切到 `Aegis` 后，面板会先把 electerm 中的 SSH bookmarks 同步到 Gateway，再刷新 Gateway 状态。因此 MCP 的 `list_hosts` 返回的是桌面端当前 SSH 书签，而不是固定 demo host。
+
 ## MVP 路线
 
 1. 跑通 electerm fork，确认桌面端可启动。

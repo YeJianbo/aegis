@@ -242,15 +242,16 @@ export default Store => {
     store.aegisGatewayStatus.loading = true
     store.aegisGatewayStatus.error = ''
     try {
+      const health = await window.pre.runGlobalAsync('aegisGatewayHealth')
+      const syncedHosts = await window.pre.runGlobalAsync(
+        'aegisGatewaySyncHosts',
+        store.buildAegisHostsFromBookmarks()
+      )
       const [
-        health,
-        hosts,
         sessions,
         approvals,
         auditEvents
       ] = await Promise.all([
-        window.pre.runGlobalAsync('aegisGatewayHealth'),
-        window.pre.runGlobalAsync('aegisGatewayHosts'),
         window.pre.runGlobalAsync('aegisGatewaySessions'),
         window.pre.runGlobalAsync('aegisGatewayApprovals'),
         window.pre.runGlobalAsync('aegisGatewayAuditEvents')
@@ -260,7 +261,7 @@ export default Store => {
         online: true,
         error: '',
         health,
-        hosts,
+        hosts: syncedHosts,
         sessions,
         approvals,
         auditEvents
@@ -273,6 +274,25 @@ export default Store => {
         error: err.message || String(err)
       }
     }
+  }
+
+  Store.prototype.buildAegisHostsFromBookmarks = function () {
+    const { bookmarks } = window.store
+    return bookmarks
+      .filter(bookmark => bookmark.type === 'ssh' && bookmark.host)
+      .map(bookmark => {
+        const tags = [
+          'ssh',
+          bookmark.username ? `user:${bookmark.username}` : '',
+          bookmark.port ? `port:${bookmark.port}` : ''
+        ].filter(Boolean)
+        return {
+          id: bookmark.id,
+          name: bookmark.title || bookmark.host,
+          address: bookmark.port ? `${bookmark.host}:${bookmark.port}` : bookmark.host,
+          tags
+        }
+      })
   }
 
   Store.prototype.explainWithAi = function (txt) {

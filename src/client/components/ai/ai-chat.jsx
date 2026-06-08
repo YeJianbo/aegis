@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Flex, Input, Popconfirm, Segmented } from 'antd'
+import AegisAgentPanel from '../aegis-agent/aegis-agent-panel'
 import TabSelect from '../footer/tab-select'
 import AiChatHistory from './ai-chat-history'
 import uid from '../../common/uid'
@@ -24,6 +25,7 @@ const MAX_HISTORY = 100
 export default function AIChat (props) {
   const [prompt, setPrompt] = useState('')
   const [mode, setMode] = useState(() => getItem(aiChatModeLsKey) || 'ask')
+  const [workspace, setWorkspace] = useState('chat')
   const isAgent = mode === 'agent'
 
   function handlePromptChange (e) {
@@ -34,6 +36,10 @@ export default function AIChat (props) {
     const m = val === 'Ask' ? 'ask' : 'agent'
     setItem(aiChatModeLsKey, m)
     setMode(m)
+  }
+
+  function handleWorkspaceChange (val) {
+    setWorkspace(val === 'Aegis' ? 'aegis' : 'chat')
   }
 
   const handleSubmit = useCallback(function () {
@@ -138,11 +144,23 @@ export default function AIChat (props) {
 
   return (
     <Flex vertical className='ai-chat-container'>
+      <Flex className='ai-workspace-switch'>
+        <Segmented
+          options={['Chat', 'Aegis']}
+          value={workspace === 'aegis' ? 'Aegis' : 'Chat'}
+          onChange={handleWorkspaceChange}
+          size='small'
+        />
+      </Flex>
       <Flex className='ai-chat-history' flex='auto'>
-        {renderHistory()}
+        {
+          workspace === 'aegis'
+            ? <AegisAgentPanel visible />
+            : renderHistory()
+        }
       </Flex>
 
-      <Flex className='ai-chat-input'>
+      <Flex className={'ai-chat-input' + (workspace === 'aegis' ? ' hidden' : '')}>
         <TextArea
           value={prompt}
           onChange={handlePromptChange}

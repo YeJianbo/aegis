@@ -66,3 +66,10 @@ Aegis 是基于 electerm 二次开发的安全远程终端工作台。第一阶�
 - 提供 `classify`、`approvals`、`auditEvents` 调试函数。
 
 后续独立 Agent Panel 可以复用同一个 `aegis-gateway-client`，再增加审批弹窗、会话 timeline 和人类暂停/接管按钮。
+
+当前桌面主入口已收敛到 AI 面板内：
+
+- Footer 的 AI 图标打开右侧 AI 面板。
+- AI 面板顶部提供 `Chat / Aegis` 切换。
+- `Aegis` 页签显示 Gateway 状态、审批队列和审计 timeline。
+- 每次刷新会把 electerm SSH bookmarks 同步到 Gateway 的 host 列表。

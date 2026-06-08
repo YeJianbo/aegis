@@ -228,6 +228,7 @@ function initIpc () {
     runWidgetFunc,
     aegisGatewayHealth: () => aegisGateway.getHealth(),
     aegisGatewayHosts: () => aegisGateway.listHosts(),
+    aegisGatewaySyncHosts: (hosts) => aegisGateway.syncHosts(undefined, hosts),
     aegisGatewaySessions: () => aegisGateway.listSessions(),
     aegisGatewayApprovals: () => aegisGateway.listApprovals(),
     aegisGatewayAuditEvents: () => aegisGateway.listAuditEvents(),
