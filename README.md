@@ -43,6 +43,52 @@ GET  /api/v1/approvals
 POST /api/v1/approvals/{approval_id}/decision
 POST /api/v1/policy/classify
 GET  /api/v1/audit/events
+POST /mcp
+```
+
+## MCP 接入
+
+Gateway 现在提供最小 MCP JSON-RPC HTTP 入口：
+
+```text
+http://127.0.0.1:17321/mcp
+```
+
+已暴露 tools：
+
+```text
+list_hosts
+open_session
+run_command
+tail_log
+get_terminal_snapshot
+```
+
+Codex 配置示例：
+
+```toml
+[mcp_servers.aegis]
+url = "http://127.0.0.1:17321/mcp"
+```
+
+MCP 调用流程：
+
+```text
+initialize
+tools/list
+tools/call list_hosts
+tools/call open_session
+tools/call run_command
+```
+
+高危命令不会直接执行，会返回：
+
+```json
+{
+  "status": "approval_pending",
+  "approval_required": true,
+  "approval_id": "..."
+}
 ```
 
 ## 桌面端接入

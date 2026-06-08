@@ -8,6 +8,7 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 mod handlers;
+mod mcp;
 mod models;
 mod state;
 
@@ -15,6 +16,7 @@ use handlers::{
     classify, decide_approval, health, list_approvals, list_audit_events, list_hosts,
     list_sessions, open_session, pause_session, resume_session, run_command, set_session_mode,
 };
+use mcp::mcp_endpoint;
 use state::AppState;
 
 #[tokio::main]
@@ -51,5 +53,6 @@ fn build_router(state: AppState) -> Router {
         )
         .route("/api/v1/policy/classify", post(classify))
         .route("/api/v1/audit/events", get(list_audit_events))
+        .route("/mcp", post(mcp_endpoint))
         .with_state(state)
 }

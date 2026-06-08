@@ -35,8 +35,27 @@ Aegis 是基于 electerm 二次开发的安全远程终端工作台。第一阶�
 - `POST /api/v1/sessions/{session_id}/mode`
 - `POST /api/v1/policy/classify`
 - `GET /api/v1/audit/events`
+- `POST /mcp`
 
 后续桌面端应通过本地 HTTP/WebSocket 连接 Gateway，而不是让 Agent 直接持有 SSH 凭据。
+
+## MCP Gateway
+
+`POST /mcp` 是 Gateway 面向 AI Coding Agent 的受控入口。当前实现最小 JSON-RPC MCP 方法：
+
+- `initialize`
+- `notifications/initialized`
+- `ping`
+- `tools/list`
+- `tools/call`
+
+`tools/call` 已映射到 Gateway 内部安全流程：
+
+- `list_hosts`：读取 Gateway 可见主机。
+- `open_session`：创建受控会话。
+- `run_command`：执行命令前进入策略引擎，必要时生成审批请求。
+- `tail_log`：转换为受控 `tail -n` 命令。
+- `get_terminal_snapshot`：返回当前会话审计输出摘要。
 
 ## 桌面端接入策略
 

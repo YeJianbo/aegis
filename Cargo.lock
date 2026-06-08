@@ -16,6 +16,7 @@ name = "aegis-gateway"
 version = "0.1.0"
 dependencies = [
  "aegis-audit",
+ "aegis-mcp",
  "aegis-policy",
  "anyhow",
  "axum",
