@@ -32,9 +32,17 @@ http://127.0.0.1:17321
 
 ```text
 GET  /health
+GET  /api/v1/hosts
+GET  /api/v1/sessions
+POST /api/v1/sessions
+POST /api/v1/sessions/{session_id}/pause
+POST /api/v1/sessions/{session_id}/resume
+POST /api/v1/sessions/{session_id}/mode
+POST /api/v1/commands
+GET  /api/v1/approvals
+POST /api/v1/approvals/{approval_id}/decision
 POST /api/v1/policy/classify
 GET  /api/v1/audit/events
-POST /api/v1/audit/events
 ```
 
 ## MVP 路线

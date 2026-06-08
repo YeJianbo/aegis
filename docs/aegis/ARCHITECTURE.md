@@ -23,8 +23,15 @@ Aegis 是基于 electerm 二次开发的安全远程终端工作台。第一阶�
 当前提交只提供 Rust 侧最小可运行框架：
 
 - `GET /health`
+- `GET /api/v1/hosts`
+- `POST /api/v1/sessions`
+- `POST /api/v1/commands`
+- `GET /api/v1/approvals`
+- `POST /api/v1/approvals/{approval_id}/decision`
+- `POST /api/v1/sessions/{session_id}/pause`
+- `POST /api/v1/sessions/{session_id}/resume`
+- `POST /api/v1/sessions/{session_id}/mode`
 - `POST /api/v1/policy/classify`
 - `GET /api/v1/audit/events`
-- `POST /api/v1/audit/events`
 
 后续桌面端应通过本地 HTTP/WebSocket 连接 Gateway，而不是让 Agent 直接持有 SSH 凭据。

@@ -1,31 +1,21 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
-use aegis_audit::AuditEvent;
-use aegis_policy::{CommandAssessment, classify_command};
 use axum::{
-    Json, Router,
-    extract::State,
+    Router,
     routing::{get, post},
 };
-use serde::{Deserialize, Serialize};
-use tokio::{net::TcpListener, sync::RwLock};
+use tokio::net::TcpListener;
 use tracing::info;
 
-#[derive(Clone, Default)]
-struct AppState {
-    audit_events: Arc<RwLock<Vec<AuditEvent>>>,
-}
+mod handlers;
+mod models;
+mod state;
 
-#[derive(Debug, Serialize)]
-struct HealthResponse {
-    service: &'static str,
-    status: &'static str,
-}
-
-#[derive(Debug, Deserialize)]
-struct ClassifyCommandRequest {
-    command: String,
-}
+use handlers::{
+    classify, decide_approval, health, list_approvals, list_audit_events, list_hosts,
+    list_sessions, open_session, pause_session, resume_session, run_command, set_session_mode,
+};
+use state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -48,33 +38,18 @@ async fn main() -> anyhow::Result<()> {
 fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
-        .route("/api/v1/policy/classify", post(classify))
+        .route("/api/v1/hosts", get(list_hosts))
+        .route("/api/v1/sessions", get(list_sessions).post(open_session))
+        .route("/api/v1/sessions/{session_id}/pause", post(pause_session))
+        .route("/api/v1/sessions/{session_id}/resume", post(resume_session))
+        .route("/api/v1/sessions/{session_id}/mode", post(set_session_mode))
+        .route("/api/v1/commands", post(run_command))
+        .route("/api/v1/approvals", get(list_approvals))
         .route(
-            "/api/v1/audit/events",
-            get(list_audit_events).post(record_audit_event),
+            "/api/v1/approvals/{approval_id}/decision",
+            post(decide_approval),
         )
+        .route("/api/v1/policy/classify", post(classify))
+        .route("/api/v1/audit/events", get(list_audit_events))
         .with_state(state)
-}
-
-async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse {
-        service: "aegis-gateway",
-        status: "ok",
-    })
-}
-
-async fn classify(Json(payload): Json<ClassifyCommandRequest>) -> Json<CommandAssessment> {
-    Json(classify_command(payload.command))
-}
-
-async fn list_audit_events(State(state): State<AppState>) -> Json<Vec<AuditEvent>> {
-    Json(state.audit_events.read().await.clone())
-}
-
-async fn record_audit_event(
-    State(state): State<AppState>,
-    Json(event): Json<AuditEvent>,
-) -> Json<AuditEvent> {
-    state.audit_events.write().await.push(event.clone());
-    Json(event)
 }
