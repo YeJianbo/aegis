@@ -9,6 +9,8 @@ Aegis 是基于 electerm 二次开发的安全远程终端工作台。第一阶�
 - `crates/aegis-policy`：命令风险分级、只读模式、黑白名单和审批判定。
 - `crates/aegis-audit`：审计事件模型、操作链路记录和后续回放数据结构。
 - `crates/aegis-mcp`：面向 Codex 等 Agent 的 MCP tool 描述和工具路由适配层。
+- `src/app/widgets/widget-aegis-gateway.js`：桌面端内置 Gateway Widget，负责从 electerm 启停和监控本地 Rust Gateway。
+- `src/app/lib/aegis-gateway-client.js`：桌面端访问 Gateway HTTP API 的轻量 client。
 
 ## MVP 顺序
 
@@ -35,3 +37,13 @@ Aegis 是基于 electerm 二次开发的安全远程终端工作台。第一阶�
 - `GET /api/v1/audit/events`
 
 后续桌面端应通过本地 HTTP/WebSocket 连接 Gateway，而不是让 Agent 直接持有 SSH 凭据。
+
+## 桌面端接入策略
+
+第一步使用 electerm 现有 Widgets 面板承载 `Aegis Gateway` 控制入口，避免一开始侵入主终端布局。该 Widget 当前负责：
+
+- 启动/停止 `aegis-gateway`。
+- 轮询 `/health` 判断 Gateway 状态。
+- 提供 `classify`、`approvals`、`auditEvents` 调试函数。
+
+后续独立 Agent Panel 可以复用同一个 `aegis-gateway-client`，再增加审批弹窗、会话 timeline 和人类暂停/接管按钮。

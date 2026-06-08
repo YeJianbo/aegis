@@ -45,6 +45,29 @@ POST /api/v1/policy/classify
 GET  /api/v1/audit/events
 ```
 
+## 桌面端接入
+
+当前已新增内置 Widget：
+
+```text
+Aegis Gateway
+```
+
+在 electerm 的 Widgets 面板中启动该 Widget 后，它会在本地启动 Rust Gateway，并显示 Gateway URL。开发模式默认执行：
+
+```bash
+cargo run -p aegis-gateway
+```
+
+Widget 实例还暴露了用于调试的函数：
+
+```text
+status
+classify
+approvals
+auditEvents
+```
+
 ## MVP 路线
 
 1. 跑通 electerm fork，确认桌面端可启动。
