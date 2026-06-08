@@ -11,6 +11,7 @@ aegis-mcp = { path = "../aegis-mcp" }
 aegis-policy = { path = "../aegis-policy" }
 anyhow.workspace = true
 axum.workspace = true
+futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

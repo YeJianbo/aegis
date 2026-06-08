@@ -17,7 +17,7 @@ use handlers::{
     list_sessions, open_session, pause_session, resume_session, run_command, set_session_mode,
     sync_hosts,
 };
-use mcp::mcp_endpoint;
+use mcp::{mcp_delete, mcp_endpoint, mcp_get};
 use state::AppState;
 
 #[tokio::main]
@@ -55,6 +55,6 @@ fn build_router(state: AppState) -> Router {
         )
         .route("/api/v1/policy/classify", post(classify))
         .route("/api/v1/audit/events", get(list_audit_events))
-        .route("/mcp", post(mcp_endpoint))
+        .route("/mcp", get(mcp_get).post(mcp_endpoint).delete(mcp_delete))
         .with_state(state)
 }

@@ -43,12 +43,12 @@ GET  /api/v1/approvals
 POST /api/v1/approvals/{approval_id}/decision
 POST /api/v1/policy/classify
 GET  /api/v1/audit/events
-POST /mcp
+GET/POST/DELETE /mcp
 ```
 
 ## MCP 接入
 
-Gateway 现在提供最小 MCP JSON-RPC HTTP 入口：
+Gateway 现在提供 Codex 可连接的 Streamable HTTP MCP 入口：
 
 ```text
 http://127.0.0.1:17321/mcp
@@ -66,9 +66,23 @@ get_terminal_snapshot
 
 Codex 配置示例：
 
+```bash
+codex mcp add aegis --url http://127.0.0.1:17321/mcp
+```
+
+建议把 Aegis 工具收敛到当前白名单，并让 Codex 外层默认放行；远程命令安全由 Aegis Gateway 的风险分级、审批队列和审计日志承担：
+
 ```toml
 [mcp_servers.aegis]
 url = "http://127.0.0.1:17321/mcp"
+enabled_tools = [
+  "list_hosts",
+  "open_session",
+  "run_command",
+  "tail_log",
+  "get_terminal_snapshot",
+]
+default_tools_approval_mode = "approve"
 ```
 
 MCP 调用流程：

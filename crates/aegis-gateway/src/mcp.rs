@@ -1,9 +1,17 @@
 use aegis_audit::{ApprovalStatus, AuditEvent};
 use aegis_mcp::{default_tools, tail_log_command};
 use aegis_policy::{RiskLevel, classify_command};
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::State,
+    http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
+    response::sse::{Event, KeepAlive, Sse},
+    response::{IntoResponse, Response},
+};
+use futures_util::stream;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::convert::Infallible;
 use uuid::Uuid;
 
 use crate::models::{ApprovalRequest, CommandStatus, HostSummary, SessionMode, SessionSummary};
@@ -41,19 +49,23 @@ struct ToolCallParams {
     arguments: Value,
 }
 
+const MCP_SESSION_ID_HEADER: &str = "mcp-session-id";
+
 pub async fn mcp_endpoint(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<JsonRpcRequest>,
-) -> Json<JsonRpcResponse> {
+) -> Response {
     let id = request.id.clone();
+    let is_initialize = request.method == "initialize";
     if request.jsonrpc.as_deref().unwrap_or("2.0") != "2.0" {
-        return Json(error_response(id, -32600, "invalid jsonrpc version"));
+        return json_rpc_response(error_response(id, -32600, "invalid jsonrpc version"), false);
     }
 
     let result = match request.method.as_str() {
         "initialize" => Ok(json!({
             "protocolVersion": "2024-11-05",
-            "capabilities": { "tools": {} },
+            "capabilities": { "tools": { "listChanged": false } },
             "serverInfo": {
                 "name": "aegis-gateway",
                 "version": env!("CARGO_PKG_VERSION")
@@ -81,7 +93,11 @@ pub async fn mcp_endpoint(
         }),
     };
 
-    Json(match result {
+    if id.is_none() {
+        return StatusCode::ACCEPTED.into_response();
+    }
+
+    let response = match result {
         Ok(value) => success_response(id, value),
         Err(err) => JsonRpcResponse {
             jsonrpc: "2.0",
@@ -89,7 +105,31 @@ pub async fn mcp_endpoint(
             result: None,
             error: Some(err),
         },
-    })
+    };
+
+    let mut response = json_rpc_response(response, is_initialize);
+    if is_initialize {
+        let session_id = headers
+            .get(MCP_SESSION_ID_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .filter(|value| !value.trim().is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        if let Ok(header_value) = HeaderValue::from_str(&session_id) {
+            response
+                .headers_mut()
+                .insert(HeaderName::from_static(MCP_SESSION_ID_HEADER), header_value);
+        }
+    }
+    response
+}
+
+pub async fn mcp_get() -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+    Sse::new(stream::pending()).keep_alive(KeepAlive::default())
+}
+
+pub async fn mcp_delete() -> StatusCode {
+    StatusCode::OK
 }
 
 async fn call_tool(state: AppState, params: ToolCallParams) -> Result<Value, JsonRpcError> {
@@ -363,4 +403,15 @@ fn invalid_params(message: impl Into<String>) -> JsonRpcError {
         code: -32602,
         message: message.into(),
     }
+}
+
+fn json_rpc_response(response: JsonRpcResponse, is_initialize: bool) -> Response {
+    let mut response = Json(response).into_response();
+    if is_initialize {
+        response.headers_mut().insert(
+            HeaderName::from_static("cache-control"),
+            HeaderValue::from_static("no-cache"),
+        );
+    }
+    response
 }
