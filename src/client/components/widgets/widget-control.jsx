@@ -30,7 +30,8 @@ export default function WidgetControl ({ formData, widgetInstancesLength }) {
         instanceId,
         success,
         error,
-        msg
+        msg,
+        alreadyRunning
       } = result
       if (!instanceId) {
         if (success === false) {
@@ -48,11 +49,14 @@ export default function WidgetControl ({ formData, widgetInstancesLength }) {
         serverInfo: result.serverInfo,
         config
       }
-      window.store.widgetInstances.push(instance)
+      const exists = window.store.widgetInstances.some(item => item.id === instance.id)
+      if (!exists) {
+        window.store.widgetInstances.push(instance)
+      }
       if (config.autoRun) {
         window.store.toggleAutoRunWidget(instance)
       }
-      showMsg(msg, 'success', result.serverInfo, 10)
+      showMsg(alreadyRunning ? 'Widget already running' : msg, 'success', result.serverInfo, 10)
     } catch (err) {
       console.error('Failed to run widget:', err)
       showMsg(`Failed to run widget: ${err.message}`, 'error', null, 10)

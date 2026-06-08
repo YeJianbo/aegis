@@ -79,6 +79,15 @@ function hasRunningInstance (widgetId) {
   return false
 }
 
+function getRunningInstanceByWidgetId (widgetId) {
+  for (const [, instance] of runningInstances) {
+    if (instance.widgetId === widgetId) {
+      return instance
+    }
+  }
+  return null
+}
+
 function runWidget (widgetId, config) {
   const widget = require(resolveWidgetPath(widgetId))
 
@@ -89,7 +98,15 @@ function runWidget (widgetId, config) {
 
   // Check if singleInstance widget already has a running instance
   if (singleInstance && hasRunningInstance(widgetId)) {
-    return Promise.reject(new Error(`Widget ${widgetId} already has a running instance. Only one instance is allowed.`))
+    const instance = getRunningInstanceByWidgetId(widgetId)
+    return Promise.resolve({
+      instanceId: instance.instanceId,
+      widgetId,
+      singleInstance: true,
+      alreadyRunning: true,
+      msg: `Widget ${widgetId} is already running.`,
+      serverInfo: instance.serverInfo
+    })
   }
 
   const instance = widget.widgetRun(config)
@@ -98,6 +115,7 @@ function runWidget (widgetId, config) {
 
   return instance.start()
     .then((result) => {
+      instance.serverInfo = result.serverInfo
       return {
         instanceId: instance.instanceId,
         widgetId,
