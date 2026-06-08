@@ -28,6 +28,12 @@ export default function Login () {
     init()
   }, [])
 
+  useEffect(() => {
+    if (logined) {
+      setTimeout(() => window.store.bootstrapAegisGatewayIntegration(), 1500)
+    }
+  }, [logined])
+
   const init = async () => {
     if (!window.pre.requireAuth) {
       return

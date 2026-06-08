@@ -7,15 +7,16 @@ use axum::{
 use tokio::net::TcpListener;
 use tracing::info;
 
+mod command_flow;
 mod handlers;
 mod mcp;
 mod models;
 mod state;
 
 use handlers::{
-    classify, decide_approval, health, list_approvals, list_audit_events, list_hosts,
-    list_sessions, open_session, pause_session, resume_session, run_command, set_session_mode,
-    sync_hosts,
+    claim_terminal_command, classify, complete_terminal_command, decide_approval, health,
+    list_approvals, list_audit_events, list_hosts, list_sessions, open_session, pause_session,
+    resume_session, run_command, set_session_mode, sync_hosts,
 };
 use mcp::{mcp_delete, mcp_endpoint, mcp_get};
 use state::AppState;
@@ -48,6 +49,14 @@ fn build_router(state: AppState) -> Router {
         .route("/api/v1/sessions/{session_id}/resume", post(resume_session))
         .route("/api/v1/sessions/{session_id}/mode", post(set_session_mode))
         .route("/api/v1/commands", post(run_command))
+        .route(
+            "/api/v1/terminal/commands/next",
+            post(claim_terminal_command),
+        )
+        .route(
+            "/api/v1/terminal/commands/{command_id}/complete",
+            post(complete_terminal_command),
+        )
         .route("/api/v1/approvals", get(list_approvals))
         .route(
             "/api/v1/approvals/{approval_id}/decision",

@@ -1,5 +1,5 @@
-use aegis_audit::{ApprovalStatus, AuditEvent};
-use aegis_policy::{CommandAssessment, RiskLevel, classify_command};
+use aegis_audit::AuditEvent;
+use aegis_policy::{CommandAssessment, classify_command};
 use axum::{
     Json,
     extract::{Path, State},
@@ -9,10 +9,11 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
+    command_flow::{CommandFlowError, decide_approval_command, submit_command},
     models::{
-        ApprovalDecisionRequest, ApprovalRequest, CommandResponse, CommandStatus, HostSummary,
-        OpenSessionRequest, RunCommandRequest, SessionSummary, SetSessionModeRequest,
-        SyncHostsRequest,
+        ApprovalDecisionRequest, ApprovalRequest, CommandResponse, CompleteTerminalCommandRequest,
+        HostSummary, OpenSessionRequest, RunCommandRequest, SessionSummary, SetSessionModeRequest,
+        SyncHostsRequest, TerminalCommandStatus, TerminalCommandTask,
     },
     state::{AppState, new_session},
 };
@@ -114,103 +115,10 @@ pub async fn run_command(
     State(state): State<AppState>,
     Json(payload): Json<RunCommandRequest>,
 ) -> ApiResult<CommandResponse> {
-    let actor_name = payload.actor_name.unwrap_or_else(|| "Codex".to_owned());
-    let assessment = classify_command(&payload.command);
-    let mut store = state.write().await;
-    let session = store
-        .sessions
-        .get(&payload.session_id)
-        .cloned()
-        .ok_or_else(|| not_found("session not found"))?;
-
-    if session.paused {
-        let event = audit_event(
-            &session,
-            &actor_name,
-            &payload.command,
-            assessment.risk,
-            ApprovalStatus::Denied,
-            Some("Agent 已暂停，命令未执行".to_owned()),
-        );
-        store.audit_events.push(event.clone());
-        return Ok(Json(CommandResponse {
-            status: CommandStatus::Blocked,
-            session_id: session.id,
-            assessment,
-            approval_id: None,
-            audit_event: event,
-            output: Some("blocked: agent paused".to_owned()),
-        }));
-    }
-
-    if !matches!(session.mode, crate::models::SessionMode::AgentWritable) {
-        let event = audit_event(
-            &session,
-            &actor_name,
-            &payload.command,
-            assessment.risk,
-            ApprovalStatus::Denied,
-            Some("当前会话不允许 Agent 写入".to_owned()),
-        );
-        store.audit_events.push(event.clone());
-        return Ok(Json(CommandResponse {
-            status: CommandStatus::Blocked,
-            session_id: session.id,
-            assessment,
-            approval_id: None,
-            audit_event: event,
-            output: Some("blocked: session is not agent-writable".to_owned()),
-        }));
-    }
-
-    if assessment.approval_required {
-        let approval = ApprovalRequest {
-            id: Uuid::new_v4(),
-            session_id: session.id.clone(),
-            actor_name: actor_name.clone(),
-            command: payload.command.clone(),
-            assessment: assessment.clone(),
-            status: ApprovalStatus::Pending,
-            proposed_command: None,
-        };
-        let event = audit_event(
-            &session,
-            &actor_name,
-            &payload.command,
-            assessment.risk,
-            ApprovalStatus::Pending,
-            Some("命令等待人工审批".to_owned()),
-        );
-        store.approvals.insert(approval.id, approval.clone());
-        store.audit_events.push(event.clone());
-        return Ok(Json(CommandResponse {
-            status: CommandStatus::ApprovalPending,
-            session_id: session.id,
-            assessment,
-            approval_id: Some(approval.id),
-            audit_event: event,
-            output: None,
-        }));
-    }
-
-    let output = simulated_terminal_output(&payload.command);
-    let event = audit_event(
-        &session,
-        &actor_name,
-        &payload.command,
-        assessment.risk,
-        ApprovalStatus::NotRequired,
-        Some(output.clone()),
-    );
-    store.audit_events.push(event.clone());
-    Ok(Json(CommandResponse {
-        status: CommandStatus::Executed,
-        session_id: session.id,
-        assessment,
-        approval_id: None,
-        audit_event: event,
-        output: Some(output),
-    }))
+    submit_command(state, payload)
+        .await
+        .map(Json)
+        .map_err(flow_error)
 }
 
 pub async fn list_approvals(State(state): State<AppState>) -> Json<Vec<ApprovalRequest>> {
@@ -222,102 +130,72 @@ pub async fn decide_approval(
     Path(approval_id): Path<Uuid>,
     Json(payload): Json<ApprovalDecisionRequest>,
 ) -> ApiResult<CommandResponse> {
-    let mut store = state.write().await;
-    let approval_snapshot = store
-        .approvals
-        .get(&approval_id)
-        .cloned()
-        .ok_or_else(|| not_found("approval not found"))?;
-    let session = store
-        .sessions
-        .get(&approval_snapshot.session_id)
-        .cloned()
-        .ok_or_else(|| not_found("session not found"))?;
-
-    let command = payload
-        .modified_command
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| approval_snapshot.command.clone());
-    let assessment = classify_command(&command);
-
-    if payload.allow {
-        let approval_status = if command == approval_snapshot.command {
-            ApprovalStatus::Allowed
-        } else {
-            ApprovalStatus::Modified
-        };
-        if let Some(approval) = store.approvals.get_mut(&approval_id) {
-            approval.status = approval_status.clone();
-            if matches!(approval_status, ApprovalStatus::Modified) {
-                approval.proposed_command = Some(command.clone());
-            }
-        }
-        let output = simulated_terminal_output(&command);
-        let event = audit_event(
-            &session,
-            &approval_snapshot.actor_name,
-            &command,
-            assessment.risk,
-            approval_status,
-            Some(output.clone()),
-        );
-        store.audit_events.push(event.clone());
-        return Ok(Json(CommandResponse {
-            status: CommandStatus::Executed,
-            session_id: session.id,
-            assessment,
-            approval_id: Some(approval_id),
-            audit_event: event,
-            output: Some(output),
-        }));
-    }
-
-    if let Some(approval) = store.approvals.get_mut(&approval_id) {
-        approval.status = ApprovalStatus::Denied;
-    }
-    let event = audit_event(
-        &session,
-        &approval_snapshot.actor_name,
-        &command,
-        assessment.risk,
-        ApprovalStatus::Denied,
-        Some("人工拒绝执行".to_owned()),
-    );
-    store.audit_events.push(event.clone());
-    Ok(Json(CommandResponse {
-        status: CommandStatus::Blocked,
-        session_id: session.id,
-        assessment,
-        approval_id: Some(approval_id),
-        audit_event: event,
-        output: Some("denied by human".to_owned()),
-    }))
+    decide_approval_command(state, approval_id, payload)
+        .await
+        .map(Json)
+        .map_err(flow_error)
 }
 
 pub async fn list_audit_events(State(state): State<AppState>) -> Json<Vec<AuditEvent>> {
     Json(state.read().await.audit_events.clone())
 }
 
-fn audit_event(
-    session: &SessionSummary,
-    actor_name: &str,
-    command: &str,
-    risk: RiskLevel,
-    approval_status: ApprovalStatus,
-    output_summary: Option<String>,
-) -> AuditEvent {
-    let mut event = AuditEvent::new_agent_command(
-        &session.id,
-        actor_name,
-        &session.host_id,
-        command,
-        risk,
-        approval_status,
-    );
-    event.cwd = session.cwd.clone();
-    event.exit_code = Some(0);
-    event.output_summary = output_summary;
-    event
+pub async fn claim_terminal_command(
+    State(state): State<AppState>,
+) -> Json<Option<TerminalCommandTask>> {
+    let mut store = state.write().await;
+    let task = store
+        .terminal_commands
+        .values_mut()
+        .find(|task| matches!(task.status, TerminalCommandStatus::Pending));
+    if let Some(task) = task {
+        task.status = TerminalCommandStatus::Running;
+        return Json(Some(task.clone()));
+    }
+    Json(None)
+}
+
+pub async fn complete_terminal_command(
+    State(state): State<AppState>,
+    Path(command_id): Path<Uuid>,
+    Json(payload): Json<CompleteTerminalCommandRequest>,
+) -> ApiResult<TerminalCommandTask> {
+    let mut store = state.write().await;
+    let task = store
+        .terminal_commands
+        .get_mut(&command_id)
+        .ok_or_else(|| not_found("terminal command not found"))?;
+    task.output = payload.output.clone();
+    task.exit_code = payload.exit_code;
+    task.error = payload.error.clone();
+    task.tab_id = payload.tab_id.clone();
+    task.status = if payload
+        .error
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_some()
+    {
+        TerminalCommandStatus::Failed
+    } else {
+        TerminalCommandStatus::Completed
+    };
+    let completed = task.clone();
+
+    if let Some(event) = store
+        .audit_events
+        .iter_mut()
+        .find(|event| event.id == completed.audit_event_id)
+    {
+        event.exit_code = completed.exit_code;
+        event.output_summary = completed
+            .error
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| completed.output.clone());
+    }
+
+    Ok(Json(completed))
 }
 
 async fn set_paused(
@@ -334,10 +212,6 @@ async fn set_paused(
     Ok(Json(session.clone()))
 }
 
-fn simulated_terminal_output(command: &str) -> String {
-    format!("[simulated terminal] executed: {command}")
-}
-
 fn not_found(message: &str) -> (StatusCode, Json<ErrorResponse>) {
     (
         StatusCode::NOT_FOUND,
@@ -345,4 +219,8 @@ fn not_found(message: &str) -> (StatusCode, Json<ErrorResponse>) {
             error: message.to_owned(),
         }),
     )
+}
+
+fn flow_error(err: CommandFlowError) -> (StatusCode, Json<ErrorResponse>) {
+    (err.status, Json(ErrorResponse { error: err.message }))
 }

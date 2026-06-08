@@ -5,7 +5,9 @@ import {
   Button,
   Empty,
   Flex,
+  Input,
   List,
+  Modal,
   Space,
   Statistic,
   Tag,
@@ -49,6 +51,34 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
 
   const handleRefresh = () => store.refreshAegisGatewayStatus()
   const handleOpenWidgets = () => store.openWidgetsModal()
+  const handleApproval = (item, allow, modifiedCommand) => {
+    store.decideAegisApproval(item.id, allow, modifiedCommand).catch(store.onError)
+  }
+  const handleModifyApproval = item => {
+    let command = item.command
+    Modal.confirm({
+      title: 'Modify Command',
+      content: (
+        <Input.TextArea
+          defaultValue={item.command}
+          autoSize={{ minRows: 3, maxRows: 8 }}
+          onChange={event => {
+            command = event.target.value
+          }}
+        />
+      ),
+      okText: 'Allow Modified',
+      cancelText: 'Cancel',
+      onOk: () => handleApproval(item, true, command)
+    })
+  }
+  const handleSessionPauseToggle = session => {
+    const action = session.paused ? store.resumeAegisSession : store.pauseAegisSession
+    action.call(store, session.id).catch(store.onError)
+  }
+  const handleSessionMode = (session, mode) => {
+    store.setAegisSessionMode(session.id, mode).catch(store.onError)
+  }
   const pendingApprovals = status.approvals.filter(item => item.status === 'pending')
   const latestAudit = status.auditEvents.slice(-8).reverse()
 
@@ -139,12 +169,95 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
                       <div className='aegis-agent-muted'>
                         {item.assessment.reason}
                       </div>
+                      <Space className='aegis-agent-actions'>
+                        <Button
+                          size='small'
+                          type='primary'
+                          onClick={() => handleApproval(item, true)}
+                        >
+                          Allow
+                        </Button>
+                        <Button
+                          size='small'
+                          onClick={() => handleModifyApproval(item)}
+                        >
+                          Modify
+                        </Button>
+                        <Button
+                          size='small'
+                          danger
+                          onClick={() => handleApproval(item, false)}
+                        >
+                          Deny
+                        </Button>
+                      </Space>
                     </div>
                   </List.Item>
                 )}
               />
               )
             : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No pending approvals' />
+        }
+      </section>
+
+      <section className='aegis-agent-section'>
+        <h3>Sessions</h3>
+        {
+          status.sessions.length
+            ? (
+              <List
+                size='small'
+                dataSource={status.sessions}
+                renderItem={item => (
+                  <List.Item>
+                    <div className='aegis-agent-list-item'>
+                      <Flex justify='space-between' align='center'>
+                        <Tag color={item.paused ? 'orange' : 'green'}>
+                          {item.paused ? 'paused' : 'running'}
+                        </Tag>
+                        <span className='aegis-agent-muted'>{item.mode}</span>
+                      </Flex>
+                      <div className='aegis-agent-command' title={item.title}>
+                        {item.title}
+                      </div>
+                      <div className='aegis-agent-muted'>
+                        {item.host_id}
+                      </div>
+                      <Space className='aegis-agent-actions' wrap>
+                        <Button
+                          size='small'
+                          onClick={() => handleSessionPauseToggle(item)}
+                        >
+                          {item.paused ? 'Resume' : 'Pause'}
+                        </Button>
+                        <Button
+                          size='small'
+                          type={item.mode === 'agent_writable' ? 'primary' : 'default'}
+                          onClick={() => handleSessionMode(item, 'agent_writable')}
+                        >
+                          Agent
+                        </Button>
+                        <Button
+                          size='small'
+                          type={item.mode === 'agent_read_only' ? 'primary' : 'default'}
+                          onClick={() => handleSessionMode(item, 'agent_read_only')}
+                        >
+                          Read-only
+                        </Button>
+                        <Button
+                          size='small'
+                          type={item.mode === 'human_only' ? 'primary' : 'default'}
+                          onClick={() => handleSessionMode(item, 'human_only')}
+                        >
+                          Human
+                        </Button>
+                      </Space>
+                    </div>
+                  </List.Item>
+                )}
+              />
+              )
+            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No sessions yet' />
         }
       </section>
 

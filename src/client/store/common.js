@@ -22,6 +22,31 @@ import { aiConfigsArr } from '../components/ai/ai-config-props'
 const e = window.translate
 const { assign } = Object
 
+function sleep (ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function quotePosixSingle (value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`
+}
+
+function escapeRegExp (value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function isUsableSshTab (tab) {
+  return tab && tab.type === 'ssh' && tab.host
+}
+
+function tabMatchesAegisHost (tab, hostId, host) {
+  if (!isUsableSshTab(tab)) return false
+  if (tab.srcId && tab.srcId === hostId) return true
+  if (tab.id && tab.id === hostId) return true
+  if (!host) return false
+  const address = String(host.address || '').split(':')[0]
+  return !!address && tab.host === address
+}
+
 export default Store => {
   Store.prototype.storeAssign = function (updates) {
     assign(window.store, updates)
@@ -266,6 +291,7 @@ export default Store => {
         approvals,
         auditEvents
       }
+      store.startAegisTerminalExecutor()
     } catch (err) {
       store.aegisGatewayStatus = {
         ...store.aegisGatewayStatus,
@@ -274,6 +300,42 @@ export default Store => {
         error: err.message || String(err)
       }
     }
+  }
+
+  Store.prototype.bootstrapAegisGatewayIntegration = function () {
+    const { store } = window
+    if (store._aegisGatewayBootstrapRunning) {
+      return
+    }
+    store._aegisGatewayBootstrapRunning = true
+
+    const loop = async () => {
+      while (store._aegisGatewayBootstrapRunning) {
+        try {
+          const health = await window.pre.runGlobalAsync('aegisGatewayHealth')
+          const syncedHosts = await window.pre.runGlobalAsync(
+            'aegisGatewaySyncHosts',
+            store.buildAegisHostsFromBookmarks()
+          )
+          store.aegisGatewayStatus = {
+            ...store.aegisGatewayStatus,
+            online: true,
+            error: '',
+            health,
+            hosts: syncedHosts
+          }
+          store.startAegisTerminalExecutor()
+        } catch (_) {
+          store.aegisGatewayStatus = {
+            ...store.aegisGatewayStatus,
+            online: false
+          }
+        }
+        await sleep(5000)
+      }
+    }
+
+    loop()
   }
 
   Store.prototype.buildAegisHostsFromBookmarks = function () {
@@ -293,6 +355,153 @@ export default Store => {
           tags
         }
       })
+  }
+
+  Store.prototype.startAegisTerminalExecutor = function () {
+    const { store } = window
+    if (store._aegisTerminalExecutorRunning) {
+      return
+    }
+    store._aegisTerminalExecutorRunning = true
+
+    const loop = async () => {
+      while (store._aegisTerminalExecutorRunning) {
+        try {
+          const task = await window.pre.runGlobalAsync('aegisGatewayClaimTerminalCommand')
+          if (!task) {
+            await sleep(1000)
+            continue
+          }
+          await store.executeAegisTerminalCommand(task)
+          if (store.rightPanelTab === 'agent') {
+            store.refreshAegisGatewayStatus().catch(() => {})
+          }
+        } catch (err) {
+          store.aegisGatewayStatus = {
+            ...store.aegisGatewayStatus,
+            executorError: err.message || String(err)
+          }
+          await sleep(2000)
+        }
+      }
+    }
+
+    loop()
+  }
+
+  Store.prototype.executeAegisTerminalCommand = async function (task) {
+    const { store } = window
+    let tabId = ''
+    try {
+      tabId = await store.resolveAegisTerminalTab(task.host_id)
+      const sentinel = `__AEGIS_EXIT_${String(task.id).replace(/-/g, '_')}__`
+      const marker = `[Agent: ${task.actor_name || 'Aegis'}] ${task.command}`
+      const wrapped = [
+        `printf '%s\\n' ${quotePosixSingle(marker)}`,
+        task.command,
+        `printf '%s=%s\\n' ${quotePosixSingle(sentinel)} "$?"`
+      ].join('\n')
+
+      store.mcpSendTerminalCommand({
+        tabId,
+        command: wrapped,
+        inputOnly: false
+      })
+
+      const idle = await store.mcpWaitForTerminalIdle({
+        tabId,
+        timeout: 45000,
+        lines: 160,
+        minWait: 1200
+      })
+      const parsed = store.parseAegisCommandOutput(idle.output || '', sentinel)
+      const payload = {
+        output: parsed.output,
+        exit_code: parsed.exitCode,
+        tab_id: tabId
+      }
+      if (idle.timedOut && parsed.exitCode === null) {
+        payload.error = idle.message || 'terminal command timed out'
+      }
+      await window.pre.runGlobalAsync('aegisGatewayCompleteTerminalCommand', task.id, payload)
+    } catch (err) {
+      await window.pre.runGlobalAsync('aegisGatewayCompleteTerminalCommand', task.id, {
+        error: err.message || String(err),
+        tab_id: tabId || null
+      })
+    }
+  }
+
+  Store.prototype.resolveAegisTerminalTab = async function (hostId) {
+    const { store } = window
+    const host = store.aegisGatewayStatus.hosts.find(item => item.id === hostId)
+    const current = store.currentTab
+    if (tabMatchesAegisHost(current, hostId, host)) {
+      return store.activeTabId
+    }
+
+    const existing = store.tabs.find(tab => tabMatchesAegisHost(tab, hostId, host))
+    if (existing) {
+      store.activeTabId = existing.id
+      if (existing.batch !== undefined) {
+        store[`activeTabId${existing.batch}`] = existing.id
+      }
+      return existing.id
+    }
+
+    if (isUsableSshTab(current)) {
+      return store.activeTabId
+    }
+
+    const bookmark = store.bookmarks.find(item => item.id === hostId)
+    if (!bookmark) {
+      throw new Error(`No connected SSH terminal or bookmark for host: ${hostId}`)
+    }
+    store.onSelectBookmark(hostId)
+    await sleep(2500)
+    if (!store.activeTabId) {
+      throw new Error(`Failed to open SSH bookmark for host: ${hostId}`)
+    }
+    return store.activeTabId
+  }
+
+  Store.prototype.parseAegisCommandOutput = function (output, sentinel) {
+    const exitPattern = new RegExp(`${escapeRegExp(sentinel)}=(\\d+)`)
+    const match = output.match(exitPattern)
+    const exitCode = match ? Number(match[1]) : null
+    const cleaned = output
+      .split('\n')
+      .filter(line => !line.includes(`${sentinel}=`))
+      .join('\n')
+      .trimEnd()
+    return {
+      output: cleaned,
+      exitCode: Number.isFinite(exitCode) ? exitCode : null
+    }
+  }
+
+  Store.prototype.decideAegisApproval = async function (approvalId, allow, modifiedCommand) {
+    const payload = {
+      allow,
+      modified_command: modifiedCommand || null
+    }
+    await window.pre.runGlobalAsync('aegisGatewayDecideApproval', approvalId, payload)
+    await window.store.refreshAegisGatewayStatus()
+  }
+
+  Store.prototype.pauseAegisSession = async function (sessionId) {
+    await window.pre.runGlobalAsync('aegisGatewayPauseSession', sessionId)
+    await window.store.refreshAegisGatewayStatus()
+  }
+
+  Store.prototype.resumeAegisSession = async function (sessionId) {
+    await window.pre.runGlobalAsync('aegisGatewayResumeSession', sessionId)
+    await window.store.refreshAegisGatewayStatus()
+  }
+
+  Store.prototype.setAegisSessionMode = async function (sessionId, mode) {
+    await window.pre.runGlobalAsync('aegisGatewaySetSessionMode', sessionId, mode)
+    await window.store.refreshAegisGatewayStatus()
   }
 
   Store.prototype.explainWithAi = function (txt) {

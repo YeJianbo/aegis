@@ -1,6 +1,5 @@
-use aegis_audit::{ApprovalStatus, AuditEvent};
 use aegis_mcp::{default_tools, tail_log_command};
-use aegis_policy::{RiskLevel, classify_command};
+use aegis_policy::RiskLevel;
 use axum::{
     Json,
     extract::State,
@@ -14,7 +13,8 @@ use serde_json::{Value, json};
 use std::convert::Infallible;
 use uuid::Uuid;
 
-use crate::models::{ApprovalRequest, CommandStatus, HostSummary, SessionMode, SessionSummary};
+use crate::command_flow::submit_command;
+use crate::models::{CommandStatus, HostSummary, RunCommandRequest, SessionSummary};
 use crate::state::{AppState, new_session};
 
 #[derive(Debug, Deserialize)]
@@ -206,6 +206,7 @@ struct McpCommandResult {
     approval_id: Option<Uuid>,
     output: Option<String>,
     audit_event_id: Uuid,
+    terminal_command_id: Option<Uuid>,
 }
 
 async fn run_command_for_mcp(
@@ -214,93 +215,29 @@ async fn run_command_for_mcp(
     command: String,
     actor_name: String,
 ) -> Result<McpCommandResult, JsonRpcError> {
-    let assessment = classify_command(&command);
-    let mut store = state.write().await;
-    let session = store
-        .sessions
-        .get(&session_id)
-        .cloned()
-        .ok_or_else(|| invalid_params("session not found"))?;
+    let response = submit_command(
+        state.clone(),
+        RunCommandRequest {
+            session_id,
+            command,
+            actor_name: Some(actor_name),
+        },
+    )
+    .await
+    .map_err(|err| JsonRpcError {
+        code: -32602,
+        message: err.message,
+    })?;
 
-    if session.paused || !matches!(session.mode, SessionMode::AgentWritable) {
-        let output = if session.paused {
-            "blocked: agent paused"
-        } else {
-            "blocked: session is not agent-writable"
-        };
-        let event = audit_event(
-            &session,
-            &actor_name,
-            &command,
-            assessment.risk,
-            ApprovalStatus::Denied,
-            Some(output.to_owned()),
-        );
-        let audit_event_id = event.id;
-        store.audit_events.push(event);
-        return Ok(McpCommandResult {
-            status: CommandStatus::Blocked,
-            session_id: session.id,
-            risk: assessment.risk,
-            approval_required: assessment.approval_required,
-            approval_id: None,
-            output: Some(output.to_owned()),
-            audit_event_id,
-        });
-    }
-
-    if assessment.approval_required {
-        let approval = ApprovalRequest {
-            id: Uuid::new_v4(),
-            session_id: session.id.clone(),
-            actor_name: actor_name.clone(),
-            command: command.clone(),
-            assessment: assessment.clone(),
-            status: ApprovalStatus::Pending,
-            proposed_command: None,
-        };
-        let event = audit_event(
-            &session,
-            &actor_name,
-            &command,
-            assessment.risk,
-            ApprovalStatus::Pending,
-            Some("命令等待人工审批".to_owned()),
-        );
-        let audit_event_id = event.id;
-        let approval_id = approval.id;
-        store.approvals.insert(approval_id, approval);
-        store.audit_events.push(event);
-        return Ok(McpCommandResult {
-            status: CommandStatus::ApprovalPending,
-            session_id: session.id,
-            risk: assessment.risk,
-            approval_required: true,
-            approval_id: Some(approval_id),
-            output: None,
-            audit_event_id,
-        });
-    }
-
-    let output = simulated_terminal_output(&command);
-    let event = audit_event(
-        &session,
-        &actor_name,
-        &command,
-        assessment.risk,
-        ApprovalStatus::NotRequired,
-        Some(output.clone()),
-    );
-    let audit_event_id = event.id;
-    store.audit_events.push(event);
     Ok(McpCommandResult {
-        status: CommandStatus::Executed,
-        session_id: session.id,
-        risk: assessment.risk,
-        approval_required: false,
-        approval_id: None,
-        output: Some(output),
-        audit_event_id,
+        status: response.status,
+        session_id: response.session_id,
+        risk: response.assessment.risk,
+        approval_required: response.assessment.approval_required,
+        approval_id: response.approval_id,
+        output: response.output,
+        audit_event_id: response.audit_event.id,
+        terminal_command_id: response.terminal_command_id,
     })
 }
 
@@ -325,32 +262,6 @@ async fn terminal_snapshot_for_mcp(
         .filter_map(|event| event.output_summary.clone())
         .collect();
     Ok(TerminalSnapshot { session_id, output })
-}
-
-fn audit_event(
-    session: &SessionSummary,
-    actor_name: &str,
-    command: &str,
-    risk: RiskLevel,
-    approval_status: ApprovalStatus,
-    output_summary: Option<String>,
-) -> AuditEvent {
-    let mut event = AuditEvent::new_agent_command(
-        &session.id,
-        actor_name,
-        &session.host_id,
-        command,
-        risk,
-        approval_status,
-    );
-    event.cwd = session.cwd.clone();
-    event.exit_code = Some(0);
-    event.output_summary = output_summary;
-    event
-}
-
-fn simulated_terminal_output(command: &str) -> String {
-    format!("[simulated terminal] executed: {command}")
 }
 
 fn parse_params<T: for<'de> Deserialize<'de>>(params: Option<Value>) -> Result<T, JsonRpcError> {

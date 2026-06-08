@@ -39,6 +39,8 @@ POST /api/v1/sessions/{session_id}/pause
 POST /api/v1/sessions/{session_id}/resume
 POST /api/v1/sessions/{session_id}/mode
 POST /api/v1/commands
+POST /api/v1/terminal/commands/next
+POST /api/v1/terminal/commands/{command_id}/complete
 GET  /api/v1/approvals
 POST /api/v1/approvals/{approval_id}/decision
 POST /api/v1/policy/classify
@@ -135,6 +137,14 @@ AI 面板 -> Chat / Aegis
 ```
 
 切到 `Aegis` 后，面板会先把 electerm 中的 SSH bookmarks 同步到 Gateway，再刷新 Gateway 状态。因此 MCP 的 `list_hosts` 返回的是桌面端当前 SSH 书签，而不是固定 demo host。
+
+桌面端还会启动 Aegis terminal executor：
+
+```text
+Gateway command queue -> electerm active/matched SSH tab -> terminal input -> idle output capture -> Gateway audit
+```
+
+因此 `run_command` 不再是模拟输出。低风险命令会真实注入已连接或匹配书签的 SSH 终端；高危命令先进入审批队列，用户在 Aegis 面板中 Allow / Deny / Modify 后，批准的命令才会进入同一条真实终端执行链路。
 
 ## MVP 路线
 

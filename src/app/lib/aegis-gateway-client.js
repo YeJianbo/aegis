@@ -52,8 +52,44 @@ async function listSessions (baseUrl) {
   return requestGateway(baseUrl, '/api/v1/sessions', { method: 'GET' })
 }
 
+async function pauseSession (baseUrl, sessionId) {
+  return requestGateway(baseUrl, `/api/v1/sessions/${sessionId}/pause`, { method: 'POST' })
+}
+
+async function resumeSession (baseUrl, sessionId) {
+  return requestGateway(baseUrl, `/api/v1/sessions/${sessionId}/resume`, { method: 'POST' })
+}
+
+async function setSessionMode (baseUrl, sessionId, mode) {
+  return requestGateway(baseUrl, `/api/v1/sessions/${sessionId}/mode`, {
+    method: 'POST',
+    body: JSON.stringify({ mode })
+  })
+}
+
 async function listAuditEvents (baseUrl) {
   return requestGateway(baseUrl, '/api/v1/audit/events', { method: 'GET' })
+}
+
+async function decideApproval (baseUrl, approvalId, payload) {
+  return requestGateway(baseUrl, `/api/v1/approvals/${approvalId}/decision`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+async function claimTerminalCommand (baseUrl) {
+  return requestGateway(baseUrl, '/api/v1/terminal/commands/next', {
+    method: 'POST',
+    body: JSON.stringify({})
+  })
+}
+
+async function completeTerminalCommand (baseUrl, commandId, payload) {
+  return requestGateway(baseUrl, `/api/v1/terminal/commands/${commandId}/complete`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
 }
 
 module.exports = {
@@ -65,6 +101,12 @@ module.exports = {
   listHosts,
   syncHosts,
   listSessions,
+  pauseSession,
+  resumeSession,
+  setSessionMode,
   listApprovals,
-  listAuditEvents
+  decideApproval,
+  listAuditEvents,
+  claimTerminalCommand,
+  completeTerminalCommand
 }

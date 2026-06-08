@@ -3,7 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use aegis_audit::AuditEvent;
 use tokio::sync::RwLock;
 
-use crate::models::{ApprovalRequest, HostSummary, SessionMode, SessionSummary};
+use crate::models::{
+    ApprovalRequest, HostSummary, SessionMode, SessionSummary, TerminalCommandTask,
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -15,6 +17,7 @@ pub struct GatewayState {
     pub hosts: HashMap<String, HostSummary>,
     pub sessions: HashMap<String, SessionSummary>,
     pub approvals: HashMap<uuid::Uuid, ApprovalRequest>,
+    pub terminal_commands: HashMap<uuid::Uuid, TerminalCommandTask>,
     pub audit_events: Vec<AuditEvent>,
 }
 
@@ -36,6 +39,7 @@ impl Default for AppState {
                 hosts,
                 sessions: HashMap::new(),
                 approvals: HashMap::new(),
+                terminal_commands: HashMap::new(),
                 audit_events: Vec::new(),
             })),
         }

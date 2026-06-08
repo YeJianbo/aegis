@@ -230,9 +230,21 @@ function initIpc () {
     aegisGatewayHosts: () => aegisGateway.listHosts(),
     aegisGatewaySyncHosts: (hosts) => aegisGateway.syncHosts(undefined, hosts),
     aegisGatewaySessions: () => aegisGateway.listSessions(),
+    aegisGatewayPauseSession: (sessionId) => aegisGateway.pauseSession(undefined, sessionId),
+    aegisGatewayResumeSession: (sessionId) => aegisGateway.resumeSession(undefined, sessionId),
+    aegisGatewaySetSessionMode: (sessionId, mode) => (
+      aegisGateway.setSessionMode(undefined, sessionId, mode)
+    ),
     aegisGatewayApprovals: () => aegisGateway.listApprovals(),
+    aegisGatewayDecideApproval: (approvalId, payload) => (
+      aegisGateway.decideApproval(undefined, approvalId, payload)
+    ),
     aegisGatewayAuditEvents: () => aegisGateway.listAuditEvents(),
     aegisGatewayClassify: (command) => aegisGateway.classifyCommand(undefined, command),
+    aegisGatewayClaimTerminalCommand: () => aegisGateway.claimTerminalCommand(),
+    aegisGatewayCompleteTerminalCommand: (commandId, payload) => (
+      aegisGateway.completeTerminalCommand(undefined, commandId, payload)
+    ),
     registerDeepLink,
     unregisterDeepLink,
     checkProtocolRegistration,
