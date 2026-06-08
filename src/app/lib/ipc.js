@@ -70,6 +70,7 @@ const { initCommandLine } = require('./command-line')
 const { watchFile, unwatchFile } = require('./watch-file')
 const lookup = require('../common/lookup')
 const { AIchat, AIchatWithTools, getStreamContent, stopStream } = require('./ai')
+const aegisGateway = require('./aegis-gateway-client')
 
 // Security: whitelist of safe environment variables for Linux/Mac/Windows
 const SAFE_ENV_KEYS = [
@@ -225,6 +226,12 @@ function initIpc () {
     runWidget,
     stopWidget,
     runWidgetFunc,
+    aegisGatewayHealth: () => aegisGateway.getHealth(),
+    aegisGatewayHosts: () => aegisGateway.listHosts(),
+    aegisGatewaySessions: () => aegisGateway.listSessions(),
+    aegisGatewayApprovals: () => aegisGateway.listApprovals(),
+    aegisGatewayAuditEvents: () => aegisGateway.listAuditEvents(),
+    aegisGatewayClassify: (command) => aegisGateway.classifyCommand(undefined, command),
     registerDeepLink,
     unregisterDeepLink,
     checkProtocolRegistration,

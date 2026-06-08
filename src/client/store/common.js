@@ -230,6 +230,51 @@ export default Store => {
     store.rightPanelTab = 'ai'
   }
 
+  Store.prototype.handleOpenAegisPanel = function () {
+    const { store } = window
+    store.rightPanelVisible = true
+    store.rightPanelTab = 'agent'
+    store.refreshAegisGatewayStatus()
+  }
+
+  Store.prototype.refreshAegisGatewayStatus = async function () {
+    const { store } = window
+    store.aegisGatewayStatus.loading = true
+    store.aegisGatewayStatus.error = ''
+    try {
+      const [
+        health,
+        hosts,
+        sessions,
+        approvals,
+        auditEvents
+      ] = await Promise.all([
+        window.pre.runGlobalAsync('aegisGatewayHealth'),
+        window.pre.runGlobalAsync('aegisGatewayHosts'),
+        window.pre.runGlobalAsync('aegisGatewaySessions'),
+        window.pre.runGlobalAsync('aegisGatewayApprovals'),
+        window.pre.runGlobalAsync('aegisGatewayAuditEvents')
+      ])
+      store.aegisGatewayStatus = {
+        loading: false,
+        online: true,
+        error: '',
+        health,
+        hosts,
+        sessions,
+        approvals,
+        auditEvents
+      }
+    } catch (err) {
+      store.aegisGatewayStatus = {
+        ...store.aegisGatewayStatus,
+        loading: false,
+        online: false,
+        error: err.message || String(err)
+      }
+    }
+  }
+
   Store.prototype.explainWithAi = function (txt) {
     const { store } = window
     store.handleOpenAIPanel()

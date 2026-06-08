@@ -110,6 +110,9 @@ class Store {
     if (rightPanelTab === 'ai') {
       return getBrand(baseURLAI).brand || 'Custom AI Model'
     }
+    if (rightPanelTab === 'agent') {
+      return 'Aegis Agent'
+    }
     return createTitle(window.store.currentTab)
   }
 

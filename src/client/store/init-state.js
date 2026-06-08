@@ -119,6 +119,16 @@ export default () => {
     rightPanelPinned: false,
     rightPanelWidth: parseInt(ls.getItem(rightSidebarWidthKey), 10) || 500,
     showAIConfigModal: false,
+    aegisGatewayStatus: {
+      loading: false,
+      online: false,
+      error: '',
+      health: null,
+      hosts: [],
+      sessions: [],
+      approvals: [],
+      auditEvents: []
+    },
 
     // for settings related
     settingItem: initSettingItem([], settingMap.bookmarks),
