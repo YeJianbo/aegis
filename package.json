@@ -1,12 +1,14 @@
 {
-  "name": "electerm",
-  "version": "3.15.42",
-  "description": "Terminal/ssh/telnet/serialport/sftp client(linux, mac, win)",
+  "name": "aegis",
+  "version": "0.1.0",
+  "description": "Secure remote terminal workspace for AI coding agents, based on electerm",
   "main": "app.js",
   "bin": "npm/electerm",
   "scripts": {
     "app": "node build/bin/app",
     "build": "npm run vite-build",
+    "gateway": "cargo run -p aegis-gateway",
+    "gateway:test": "cargo test --workspace",
     "start": "node build/bin/start.js",
     "icon": "node build/bin/icon",
     "clean": "node build/bin/clean",
@@ -37,7 +39,7 @@
   "sponsorLink": "https://electerm.html5beta.com/sponsor-electerm.html",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/electerm/electerm.git"
+    "url": "git+https://github.com/your-org/aegis.git"
   },
   "author": {
     "name": "ZHAO Xudong",
@@ -45,10 +47,10 @@
     "url": "https://github.com/zxdong262"
   },
   "bugs": {
-    "url": "https://github.com/electerm/electerm/issues"
+    "url": "https://github.com/your-org/aegis/issues"
   },
-  "homepage": "https://electerm.html5beta.com",
-  "releases": "https://github.com/electerm/electerm/releases",
+  "homepage": "https://github.com/your-org/aegis",
+  "releases": "https://github.com/your-org/aegis/releases",
   "engines": {
     "node": ">=16.0.0"
   },
