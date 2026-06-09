@@ -52,10 +52,11 @@ export default Store => {
     return window.pre.runGlobalAsync('runWidgetFunc', instanceId, funcName, ...args)
   }
 
-  Store.prototype.openWidgetsModal = () => {
+  Store.prototype.openWidgetsModal = (targetWidgetId = '') => {
     const {
       store
     } = window
+    store.widgetTargetId = targetWidgetId
     store.setSettingItem(getInitItem([], settingMap.widgets))
     store.settingTab = settingMap.widgets
     store.openSettingModal()

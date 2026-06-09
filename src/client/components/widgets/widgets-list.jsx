@@ -32,6 +32,21 @@ export default auto(function WidgetsList ({ activeItemId, store }) {
     }
   }, [])
 
+  useEffect(() => {
+    const { widgetTargetId } = store
+    if (!widgetTargetId || !widgets.length) {
+      return
+    }
+    const target = widgets.find(widget => widget.id === widgetTargetId)
+    if (!target) {
+      return
+    }
+    setTab('widgets')
+    setKeyword(target.info?.name || widgetTargetId)
+    window.store.setSettingItem(target)
+    window.store.widgetTargetId = ''
+  }, [store, store.widgetTargetId, widgets])
+
   const loadWidgets = async () => {
     try {
       const widgets = await window.store.listWidgets()

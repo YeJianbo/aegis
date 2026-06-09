@@ -77,16 +77,25 @@
   overflow-y auto
 
 .aegis-agent-compact-collapse
-  margin-top 4px
+  margin-top 6px
+  .ant-collapse-item
+    border-bottom 1px solid var(--main-darker) !important
   .ant-collapse-header
-    padding 6px 0 !important
+    align-items center !important
+    padding 8px 0 !important
   .ant-collapse-header-text
     flex 1
+  .ant-collapse-expand-icon
+    color var(--text-light)
   .ant-collapse-content-box
     padding 2px 0 8px !important
 
 .aegis-agent-collapse-label
-  width 100%
+  display inline-flex
+  align-items center
+  gap 8px
+  .ant-tag
+    margin-inline-end 0
 
 .aegis-agent-history-item
   padding 6px 0

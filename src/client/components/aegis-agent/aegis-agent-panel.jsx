@@ -111,7 +111,7 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
   }
 
   const handleRefresh = () => store.refreshAegisGatewayStatus()
-  const handleOpenWidgets = () => store.openWidgetsModal()
+  const handleOpenWidgets = () => store.openWidgetsModal('aegis-gateway')
   const handleApproval = (item, allow, modifiedCommand) => {
     store.decideAegisApproval(item.id, allow, modifiedCommand).catch(store.onError)
   }
@@ -371,6 +371,15 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
       : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No audit events yet' />
   }
 
+  function renderCollapseLabel (title, count) {
+    return (
+      <span className='aegis-agent-collapse-label'>
+        <span>{title}</span>
+        <Tag>{count}</Tag>
+      </span>
+    )
+  }
+
   return (
     <div className='aegis-agent-panel'>
       <Flex justify='space-between' align='center' className='aegis-agent-toolbar'>
@@ -512,26 +521,18 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
       <Collapse
         ghost
         size='small'
+        expandIconPosition='end'
         className='aegis-agent-compact-collapse'
+        defaultActiveKey={pendingApprovals.length ? ['approvals'] : []}
         items={[
           {
             key: 'approvals',
-            label: (
-              <Flex className='aegis-agent-collapse-label' justify='space-between' align='center'>
-                <span>Approvals</span>
-                <Tag>{pendingApprovals.length}</Tag>
-              </Flex>
-            ),
+            label: renderCollapseLabel('Approvals', pendingApprovals.length),
             children: renderApprovalsContent()
           },
           {
             key: 'audit',
-            label: (
-              <Flex className='aegis-agent-collapse-label' justify='space-between' align='center'>
-                <span>Audit Timeline</span>
-                <Tag>{latestAudit.length}</Tag>
-              </Flex>
-            ),
+            label: renderCollapseLabel('Audit Timeline', latestAudit.length),
             children: renderAuditContent()
           }
         ]}

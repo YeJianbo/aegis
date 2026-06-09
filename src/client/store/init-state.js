@@ -217,6 +217,7 @@ export default () => {
     // widgets
     widgets: [],
     widgetInstances: [],
+    widgetTargetId: '',
     autoRunWidgets: [],
     // move item
     openMoveModal: false,
