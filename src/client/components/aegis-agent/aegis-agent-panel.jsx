@@ -22,6 +22,10 @@ import {
   SafetyCertificateOutlined,
   SettingOutlined
 } from '@ant-design/icons'
+import {
+  connectionMap,
+  statusMap
+} from '../../common/constants'
 import './aegis-agent.styl'
 
 function riskColor (risk) {
@@ -49,6 +53,39 @@ function splitPatterns (value) {
     .split(/[\n,]/)
     .map(item => item.trim())
     .filter(Boolean)
+}
+
+function tabAddress (tab) {
+  return tab?.port ? `${tab.host}:${tab.port}` : tab?.host
+}
+
+function tabDisplayName (tab) {
+  return tab?.title || [tab?.username, tabAddress(tab)].filter(Boolean).join('@') || tab?.host || tab?.id
+}
+
+function isConnectedAegisTab (tab) {
+  return !!(
+    tab?.host &&
+    tab.status === statusMap.success &&
+    (tab.type === connectionMap.ssh || tab.type === connectionMap.ftp)
+  )
+}
+
+function findHostForTab (tab, hosts) {
+  if (tab?.srcId) {
+    const sourceHost = hosts.find(host => host.id === tab.srcId)
+    if (sourceHost) return sourceHost
+  }
+  if (tab?.id) {
+    const idHost = hosts.find(host => host.id === tab.id)
+    if (idHost) return idHost
+  }
+  const address = tabAddress(tab)
+  const hostOnly = String(tab?.host || '')
+  return hosts.find(host => (
+    host.address === address ||
+    String(host.address || '').split(':')[0] === hostOnly
+  ))
 }
 
 export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
@@ -118,6 +155,56 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
   }
   const pendingApprovals = status.approvals.filter(item => item.status === 'pending')
   const latestAudit = status.auditEvents.slice(-8).reverse()
+  const usedSessionIds = new Set()
+  const connectedRows = store.tabs
+    .filter(isConnectedAegisTab)
+    .map(tab => {
+      const host = findHostForTab(tab, status.hosts)
+      const hostId = host?.id || tab.srcId || tab.id
+      const session = status.sessions.find(item => (
+        !usedSessionIds.has(item.id) && item.host_id === hostId
+      ))
+      if (session) {
+        usedSessionIds.add(session.id)
+      }
+      return {
+        tab,
+        host,
+        hostId,
+        session
+      }
+    })
+  const historicalSessions = status.sessions.filter(item => !usedSessionIds.has(item.id))
+
+  function renderSessionControls (session) {
+    return (
+      <Space className='aegis-agent-actions' wrap>
+        <Button
+          size='small'
+          onClick={() => handleSessionPauseToggle(session)}
+        >
+          {session.paused ? 'Resume' : 'Pause'}
+        </Button>
+        <Segmented
+          size='small'
+          value={session.mode}
+          options={[
+            { label: 'Agent', value: 'agent_writable' },
+            { label: 'Read-only', value: 'agent_read_only' },
+            { label: 'Human', value: 'human_only' }
+          ]}
+          onChange={mode => handleSessionMode(session, mode)}
+        />
+        <Button
+          size='small'
+          danger
+          onClick={() => handleCloseSession(session)}
+        >
+          Close
+        </Button>
+      </Space>
+    )
+  }
 
   return (
     <div className='aegis-agent-panel'>
@@ -178,8 +265,8 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
       }
 
       <div className='aegis-agent-metrics'>
-        <Statistic title='Hosts' value={status.hosts.length} prefix={<ApiOutlined />} />
-        <Statistic title='Sessions' value={status.sessions.length} prefix={<SafetyCertificateOutlined />} />
+        <Statistic title='Connected' value={connectedRows.length} prefix={<ApiOutlined />} />
+        <Statistic title='History' value={historicalSessions.length} prefix={<SafetyCertificateOutlined />} />
         <Statistic title='Pending' value={pendingApprovals.length} />
       </div>
 
@@ -279,70 +366,87 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
       </section>
 
       <section className='aegis-agent-section'>
-        <h3>Sessions</h3>
+        <h3>Current Connections</h3>
         {
-          status.sessions.length
+          connectedRows.length
             ? (
               <List
                 size='small'
-                dataSource={status.sessions}
-                renderItem={item => (
-                  <List.Item>
+                dataSource={connectedRows}
+                renderItem={row => (
+                  <List.Item className='aegis-agent-compact-item'>
                     <div className='aegis-agent-list-item'>
                       <Flex justify='space-between' align='center'>
-                        <Tag color={item.paused ? 'orange' : 'green'}>
-                          {item.paused ? 'paused' : 'running'}
+                        <Tag color='green'>
+                          connected
                         </Tag>
-                        <span className='aegis-agent-muted'>{item.mode}</span>
+                        <span className='aegis-agent-muted'>
+                          {row.session ? row.session.mode : 'no agent session'}
+                        </span>
                       </Flex>
-                      <div className='aegis-agent-command' title={item.title}>
-                        {item.title}
+                      <div className='aegis-agent-command' title={tabDisplayName(row.tab)}>
+                        {tabDisplayName(row.tab)}
                       </div>
                       <div className='aegis-agent-muted'>
-                        {item.host_id}
+                        {[row.hostId, tabAddress(row.tab)].filter(Boolean).join(' · ')}
                       </div>
                       <Space className='aegis-agent-actions' wrap>
                         <Button
                           size='small'
-                          onClick={() => handleSessionPauseToggle(item)}
+                          onClick={() => store.changeActiveTabId(row.tab.id)}
                         >
-                          {item.paused ? 'Resume' : 'Pause'}
+                          Focus
                         </Button>
-                        <Button
-                          size='small'
-                          type={item.mode === 'agent_writable' ? 'primary' : 'default'}
-                          onClick={() => handleSessionMode(item, 'agent_writable')}
-                        >
-                          Agent
-                        </Button>
-                        <Button
-                          size='small'
-                          type={item.mode === 'agent_read_only' ? 'primary' : 'default'}
-                          onClick={() => handleSessionMode(item, 'agent_read_only')}
-                        >
-                          Read-only
-                        </Button>
-                        <Button
-                          size='small'
-                          type={item.mode === 'human_only' ? 'primary' : 'default'}
-                          onClick={() => handleSessionMode(item, 'human_only')}
-                        >
-                          Human
-                        </Button>
-                        <Button
-                          size='small'
-                          danger
-                          onClick={() => handleCloseSession(item)}
-                        >
-                          Close
-                        </Button>
+                        {row.session ? renderSessionControls(row.session) : null}
                       </Space>
                     </div>
                   </List.Item>
                 )}
               />
               )
-            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No sessions yet' />
+            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No connected Aegis tabs' />
+        }
+      </section>
+
+      <section className='aegis-agent-section aegis-agent-history-section'>
+        <Flex justify='space-between' align='center' className='aegis-agent-section-title'>
+          <h3>History</h3>
+          <Tag>{historicalSessions.length}</Tag>
+        </Flex>
+        {
+          historicalSessions.length
+            ? (
+              <List
+                size='small'
+                dataSource={historicalSessions}
+                renderItem={item => (
+                  <List.Item className='aegis-agent-history-item'>
+                    <div className='aegis-agent-list-item'>
+                      <Flex justify='space-between' align='center'>
+                        <Tag color={item.paused ? 'orange' : 'default'}>
+                          {item.paused ? 'paused' : 'history'}
+                        </Tag>
+                        <span className='aegis-agent-muted'>{item.mode}</span>
+                      </Flex>
+                      <div className='aegis-agent-command' title={item.title}>
+                        {item.title}
+                      </div>
+                      <Flex justify='space-between' align='center'>
+                        <span className='aegis-agent-muted'>{item.host_id}</span>
+                        <Button
+                          size='small'
+                          danger
+                          onClick={() => handleCloseSession(item)}
+                        >
+                          Remove
+                        </Button>
+                      </Flex>
+                    </div>
+                  </List.Item>
+                )}
+              />
+              )
+            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No historical sessions' />
         }
       </section>
 
