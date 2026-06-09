@@ -23,6 +23,8 @@ export default class AttachAddonCustom {
     this._passwordPromptDetected = false
     this._pendingEchoCheck = null
     this._echoCheckTimer = null
+    this._aegisEchoFilter = null
+    this._aegisEchoFilterTimer = null
   }
 
   _initBase = async () => {
@@ -156,6 +158,51 @@ export default class AttachAddonCustom {
     return str.includes(ESC + ']633;')
   }
 
+  startAegisEchoFilter = (command, timeout = 8000) => {
+    this.stopAegisEchoFilter()
+    this._aegisEchoFilter = {
+      command: String(command || ''),
+      buffer: ''
+    }
+    this._aegisEchoFilterTimer = setTimeout(() => {
+      this.stopAegisEchoFilter()
+    }, timeout)
+  }
+
+  stopAegisEchoFilter = () => {
+    if (this._aegisEchoFilterTimer) {
+      clearTimeout(this._aegisEchoFilterTimer)
+      this._aegisEchoFilterTimer = null
+    }
+    this._aegisEchoFilter = null
+  }
+
+  filterAegisEcho = (str) => {
+    const filter = this._aegisEchoFilter
+    if (!filter?.command) {
+      return str
+    }
+    filter.buffer += str
+    const { buffer, command } = filter
+    const index = buffer.indexOf(command)
+    if (index !== -1) {
+      const before = buffer.slice(0, index)
+      const after = buffer
+        .slice(index + command.length)
+        .replace(/^\r\n?|\n/, '')
+      this.stopAegisEchoFilter()
+      return before + after
+    }
+
+    const candidate = buffer.replace(/^[\r\n]+/, '')
+    if (command.startsWith(candidate)) {
+      return ''
+    }
+
+    this.stopAegisEchoFilter()
+    return buffer
+  }
+
   writeToTerminalDirect = (data) => {
     const { term } = this
     if (term.parent?.onZmodem) {
@@ -214,6 +261,11 @@ export default class AttachAddonCustom {
       }
     }
     this._handleEchoDetection(str)
+    str = this.filterAegisEcho(str)
+    if (!str) {
+      return
+    }
+    data = str
     if (this._checkPasswordPrompt(str) && !this._passwordPromptDetected) {
       this._passwordPromptDetected = true
       // Show password dropdown immediately after terminal renders the prompt

@@ -587,11 +587,8 @@ export default Store => {
       const sentinel = `__AEGIS_EXIT_${String(task.id).replace(/-/g, '_')}__`
       const { terminalRef, send } = await waitForAegisTerminalSender(tabId)
       terminalRef.term.write(`\r\x1b[2K\x1b[45;97m Aegis Agent \x1b[0m \x1b[36m\x1b[1m$ ${task.command}\x1b[0m\r\n`)
-      terminalRef.attachAddon?.startOutputSuppression?.(1200, null, true)
-      send('stty -echo 2>/dev/null || true\r')
-      await sleep(800)
-      terminalRef.attachAddon?.stopOutputSuppression?.(true)
-      send(`${task.command}\rstty echo 2>/dev/null || true\r`)
+      terminalRef.attachAddon?.startAegisEchoFilter?.(task.command)
+      send(`${task.command}\r`)
 
       const idle = await store.mcpWaitForTerminalIdle({
         tabId,
