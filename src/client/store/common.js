@@ -27,19 +27,38 @@ function sleep (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-function quotePosixSingle (value) {
-  return `'${String(value).replace(/'/g, "'\\''")}'`
-}
-
 function escapeRegExp (value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-const aegisAnsi = {
-  reset: '\\033[0m',
-  bold: '\\033[1m',
-  fgCyan: '\\033[36m',
-  bgMagenta: '\\033[45;97m'
+function stripAnsi (value) {
+  const esc = String.fromCharCode(27)
+  return String(value || '').replace(new RegExp(`${esc}\\[[0-9;]*[A-Za-z]`, 'g'), '')
+}
+
+function getAegisTerminalSender (terminalRef) {
+  const attachAddon = terminalRef?.attachAddon
+  if (typeof attachAddon?._sendData === 'function') {
+    return data => attachAddon._sendData(data)
+  }
+  const socket = attachAddon?._socket || attachAddon?.socket
+  if (socket?.readyState === 1 && typeof socket.send === 'function') {
+    return data => socket.send(data)
+  }
+  return null
+}
+
+async function waitForAegisTerminalSender (tabId, timeout = 20000) {
+  const started = Date.now()
+  while (Date.now() - started < timeout) {
+    const terminalRef = refs.get('term-' + tabId)
+    const send = getAegisTerminalSender(terminalRef)
+    if (terminalRef?.term && send) {
+      return { terminalRef, send }
+    }
+    await sleep(300)
+  }
+  throw new Error(`Terminal transport not ready for tab: ${tabId}`)
 }
 
 function isUsableSshTab (tab) {
@@ -566,24 +585,13 @@ export default Store => {
     try {
       tabId = await store.resolveAegisTerminalTab(task.host_id)
       const sentinel = `__AEGIS_EXIT_${String(task.id).replace(/-/g, '_')}__`
-      const markerFormat = [
-        '\\r\\033[2K\\033[1A\\r\\033[2K',
-        `${aegisAnsi.bgMagenta} Aegis Agent ${aegisAnsi.reset}`,
-        `${aegisAnsi.fgCyan}${aegisAnsi.bold}$ %s${aegisAnsi.reset}\\n`
-      ].join(' ')
-      const wrapped = [
-        'stty -echo 2>/dev/null || true',
-        `printf ${quotePosixSingle(markerFormat)} ${quotePosixSingle(task.command)}`,
-        task.command,
-        '__aegis_exit=$?',
-        'stty echo 2>/dev/null || true'
-      ].join('\n')
-
-      store.mcpSendTerminalCommand({
-        tabId,
-        command: wrapped,
-        inputOnly: false
-      })
+      const { terminalRef, send } = await waitForAegisTerminalSender(tabId)
+      terminalRef.term.write(`\r\x1b[2K\x1b[45;97m Aegis Agent \x1b[0m \x1b[36m\x1b[1m$ ${task.command}\x1b[0m\r\n`)
+      terminalRef.attachAddon?.startOutputSuppression?.(1200, null, true)
+      send('stty -echo 2>/dev/null || true\r')
+      await sleep(800)
+      terminalRef.attachAddon?.stopOutputSuppression?.(true)
+      send(`${task.command}\rstty echo 2>/dev/null || true\r`)
 
       const idle = await store.mcpWaitForTerminalIdle({
         tabId,
@@ -651,6 +659,7 @@ export default Store => {
       .filter(line => !line.includes(`${sentinel}=`))
       .filter(line => !line.includes('stty -echo 2>/dev/null || true'))
       .filter(line => !line.includes('stty echo 2>/dev/null || true'))
+      .filter(line => !stripAnsi(line).trim().startsWith('Aegis Agent'))
       .join('\n')
       .trimEnd()
     return {

@@ -615,6 +615,7 @@ export default Store => {
     const timeout = Math.min(args.timeout || 30000, 120000)
     const pollInterval = 500
     const minWait = args.minWait !== undefined ? args.minWait : 1000
+    const idleQuietMs = args.idleQuietMs || 2000
     const lineCountToFetch = args.lines || 50
 
     if (!tabId) {
@@ -647,18 +648,27 @@ export default Store => {
       return { output: lines.join('\n'), lineCount: lines.length }
     }
 
-    // Poll until onData becomes false (4s idle debounce in tab.jsx)
+    let lastSnapshot = collectOutput()
+    let lastFingerprint = `${lastSnapshot.lineCount}:${lastSnapshot.output}`
+    let lastChangeAt = Date.now()
+
     while (Date.now() - start < timeout) {
       const tabRef = refsTabs.get('tab-' + tabId)
       const onData = tabRef?.state.terminalOnData
-      if (!onData) {
-        const { output, lineCount } = collectOutput()
+      const snapshot = collectOutput()
+      const fingerprint = `${snapshot.lineCount}:${snapshot.output}`
+      if (fingerprint !== lastFingerprint) {
+        lastSnapshot = snapshot
+        lastFingerprint = fingerprint
+        lastChangeAt = Date.now()
+      }
+      if (!onData && Date.now() - lastChangeAt >= idleQuietMs) {
         return {
           tabId,
           elapsed: Date.now() - start,
           timedOut: false,
-          output,
-          lineCount
+          output: lastSnapshot.output,
+          lineCount: lastSnapshot.lineCount
         }
       }
       await new Promise(resolve => setTimeout(resolve, pollInterval))
