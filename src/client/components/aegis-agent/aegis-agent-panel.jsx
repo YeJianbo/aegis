@@ -3,6 +3,7 @@ import { auto } from 'manate/react'
 import {
   Alert,
   Button,
+  Collapse,
   Empty,
   Flex,
   Input,
@@ -250,6 +251,126 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
     )
   }
 
+  function renderPolicyPopover () {
+    return (
+      <div className='aegis-agent-policy-popover'>
+        <div className='aegis-agent-policy'>
+          <Segmented
+            block
+            size='small'
+            value={policyDraft.mode}
+            options={[
+              { label: 'Guarded', value: 'guarded' },
+              { label: 'Full allow', value: 'full_allow' }
+            ]}
+            onChange={mode => setPolicyDraft({ ...policyDraft, mode })}
+          />
+          <Input.TextArea
+            className='aegis-agent-policy-input'
+            value={policyDraft.whitelist}
+            placeholder='Whitelist patterns, one per line'
+            autoSize={{ minRows: 2, maxRows: 5 }}
+            onChange={event => setPolicyDraft({
+              ...policyDraft,
+              whitelist: event.target.value
+            })}
+          />
+          <Input.TextArea
+            className='aegis-agent-policy-input'
+            value={policyDraft.blacklist}
+            placeholder='Blacklist patterns, one per line'
+            autoSize={{ minRows: 2, maxRows: 5 }}
+            onChange={event => setPolicyDraft({
+              ...policyDraft,
+              blacklist: event.target.value
+            })}
+          />
+          <Button size='small' type='primary' block onClick={handlePolicySave}>
+            Save Policy
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  function renderApprovalsContent () {
+    return pendingApprovals.length
+      ? (
+        <List
+          size='small'
+          dataSource={pendingApprovals}
+          renderItem={item => (
+            <List.Item>
+              <div className='aegis-agent-list-item'>
+                <Flex justify='space-between' align='center'>
+                  <Tag color={riskColor(item.assessment.risk)}>
+                    {item.assessment.risk}
+                  </Tag>
+                  <span className='aegis-agent-muted'>{item.actor_name}</span>
+                </Flex>
+                <div className='aegis-agent-command' title={item.command}>
+                  {fmtCommand(item.command)}
+                </div>
+                <div className='aegis-agent-muted'>
+                  {item.assessment.reason}
+                </div>
+                <Space className='aegis-agent-actions'>
+                  <Button
+                    size='small'
+                    type='primary'
+                    onClick={() => handleApproval(item, true)}
+                  >
+                    Allow
+                  </Button>
+                  <Button
+                    size='small'
+                    onClick={() => handleModifyApproval(item)}
+                  >
+                    Modify
+                  </Button>
+                  <Button
+                    size='small'
+                    danger
+                    onClick={() => handleApproval(item, false)}
+                  >
+                    Deny
+                  </Button>
+                </Space>
+              </div>
+            </List.Item>
+          )}
+        />
+        )
+      : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No pending approvals' />
+  }
+
+  function renderAuditContent () {
+    return latestAudit.length
+      ? (
+        <List
+          size='small'
+          dataSource={latestAudit}
+          renderItem={item => (
+            <List.Item>
+              <div className='aegis-agent-list-item'>
+                <Flex justify='space-between' align='center'>
+                  <Tag color={riskColor(item.risk)}>{item.risk}</Tag>
+                  <span className='aegis-agent-muted'>{item.approval_status}</span>
+                </Flex>
+                <div className='aegis-agent-command' title={item.command}>
+                  {fmtCommand(item.command)}
+                </div>
+                <div className='aegis-agent-muted'>
+                  {item.output_summary || 'No output summary'}
+                </div>
+              </div>
+            </List.Item>
+          )}
+        />
+        )
+      : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No audit events yet' />
+  }
+
   return (
     <div className='aegis-agent-panel'>
       <Flex justify='space-between' align='center' className='aegis-agent-toolbar'>
@@ -263,6 +384,19 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
           <span className='aegis-agent-url'>127.0.0.1:17321</span>
         </Space>
         <Space>
+          <Popover
+            trigger='click'
+            placement='bottomRight'
+            title='Policy'
+            content={renderPolicyPopover()}
+          >
+            <Tooltip title='Policy'>
+              <Button
+                icon={<SafetyCertificateOutlined />}
+                size='small'
+              />
+            </Tooltip>
+          </Popover>
           <Popover
             trigger='click'
             placement='bottomRight'
@@ -328,104 +462,9 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
 
       <div className='aegis-agent-metrics'>
         <Statistic title='Connected' value={connectedRows.length} prefix={<ApiOutlined />} />
-        <Statistic title='History' value={historicalSessions.length} prefix={<SafetyCertificateOutlined />} />
+        <Statistic title='History' value={historicalSessions.length} />
         <Statistic title='Pending' value={pendingApprovals.length} />
       </div>
-
-      <section className='aegis-agent-section'>
-        <Flex justify='space-between' align='center' className='aegis-agent-section-title'>
-          <h3>Policy</h3>
-          <Button size='small' type='primary' onClick={handlePolicySave}>
-            Save
-          </Button>
-        </Flex>
-        <div className='aegis-agent-policy'>
-          <Segmented
-            block
-            size='small'
-            value={policyDraft.mode}
-            options={[
-              { label: 'Guarded', value: 'guarded' },
-              { label: 'Full allow', value: 'full_allow' }
-            ]}
-            onChange={mode => setPolicyDraft({ ...policyDraft, mode })}
-          />
-          <Input.TextArea
-            className='aegis-agent-policy-input'
-            value={policyDraft.whitelist}
-            placeholder='Whitelist patterns, one per line'
-            autoSize={{ minRows: 2, maxRows: 5 }}
-            onChange={event => setPolicyDraft({
-              ...policyDraft,
-              whitelist: event.target.value
-            })}
-          />
-          <Input.TextArea
-            className='aegis-agent-policy-input'
-            value={policyDraft.blacklist}
-            placeholder='Blacklist patterns, one per line'
-            autoSize={{ minRows: 2, maxRows: 5 }}
-            onChange={event => setPolicyDraft({
-              ...policyDraft,
-              blacklist: event.target.value
-            })}
-          />
-        </div>
-      </section>
-
-      <section className='aegis-agent-section'>
-        <h3>Approvals</h3>
-        {
-          pendingApprovals.length
-            ? (
-              <List
-                size='small'
-                dataSource={pendingApprovals}
-                renderItem={item => (
-                  <List.Item>
-                    <div className='aegis-agent-list-item'>
-                      <Flex justify='space-between' align='center'>
-                        <Tag color={riskColor(item.assessment.risk)}>
-                          {item.assessment.risk}
-                        </Tag>
-                        <span className='aegis-agent-muted'>{item.actor_name}</span>
-                      </Flex>
-                      <div className='aegis-agent-command' title={item.command}>
-                        {fmtCommand(item.command)}
-                      </div>
-                      <div className='aegis-agent-muted'>
-                        {item.assessment.reason}
-                      </div>
-                      <Space className='aegis-agent-actions'>
-                        <Button
-                          size='small'
-                          type='primary'
-                          onClick={() => handleApproval(item, true)}
-                        >
-                          Allow
-                        </Button>
-                        <Button
-                          size='small'
-                          onClick={() => handleModifyApproval(item)}
-                        >
-                          Modify
-                        </Button>
-                        <Button
-                          size='small'
-                          danger
-                          onClick={() => handleApproval(item, false)}
-                        >
-                          Deny
-                        </Button>
-                      </Space>
-                    </div>
-                  </List.Item>
-                )}
-              />
-              )
-            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No pending approvals' />
-        }
-      </section>
 
       <section className='aegis-agent-section'>
         <h3>Current Connections</h3>
@@ -470,35 +509,33 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
         }
       </section>
 
-      <section className='aegis-agent-section'>
-        <h3>Audit Timeline</h3>
-        {
-          latestAudit.length
-            ? (
-              <List
-                size='small'
-                dataSource={latestAudit}
-                renderItem={item => (
-                  <List.Item>
-                    <div className='aegis-agent-list-item'>
-                      <Flex justify='space-between' align='center'>
-                        <Tag color={riskColor(item.risk)}>{item.risk}</Tag>
-                        <span className='aegis-agent-muted'>{item.approval_status}</span>
-                      </Flex>
-                      <div className='aegis-agent-command' title={item.command}>
-                        {fmtCommand(item.command)}
-                      </div>
-                      <div className='aegis-agent-muted'>
-                        {item.output_summary || 'No output summary'}
-                      </div>
-                    </div>
-                  </List.Item>
-                )}
-              />
-              )
-            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No audit events yet' />
-        }
-      </section>
+      <Collapse
+        ghost
+        size='small'
+        className='aegis-agent-compact-collapse'
+        items={[
+          {
+            key: 'approvals',
+            label: (
+              <Flex className='aegis-agent-collapse-label' justify='space-between' align='center'>
+                <span>Approvals</span>
+                <Tag>{pendingApprovals.length}</Tag>
+              </Flex>
+            ),
+            children: renderApprovalsContent()
+          },
+          {
+            key: 'audit',
+            label: (
+              <Flex className='aegis-agent-collapse-label' justify='space-between' align='center'>
+                <span>Audit Timeline</span>
+                <Tag>{latestAudit.length}</Tag>
+              </Flex>
+            ),
+            children: renderAuditContent()
+          }
+        ]}
+      />
     </div>
   )
 })
