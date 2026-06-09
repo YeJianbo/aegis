@@ -38,15 +38,8 @@ function escapeRegExp (value) {
 const aegisAnsi = {
   reset: '\\033[0m',
   bold: '\\033[1m',
-  dim: '\\033[2m',
   fgCyan: '\\033[36m',
-  fgGreen: '\\033[32m',
-  fgRed: '\\033[31m',
-  bgMagenta: '\\033[45;97m',
-  bgGreen: '\\033[42;30m',
-  bgRed: '\\033[41;97m',
-  bgYellow: '\\033[43;30m',
-  bgOrange: '\\033[48;5;208;30m'
+  bgMagenta: '\\033[45;97m'
 }
 
 function isUsableSshTab (tab) {
@@ -72,14 +65,6 @@ function activateAegisTab (store, tab) {
     store[`activeTabId${tab.batch}`] = tab.id
     store.currentLayoutBatch = tab.batch
   }
-}
-
-function aegisRiskBadge (risk) {
-  const label = String(risk || 'low').toUpperCase()
-  if (risk === 'critical') return `${aegisAnsi.bgRed} ${label} ${aegisAnsi.reset}`
-  if (risk === 'high') return `${aegisAnsi.bgOrange} ${label} ${aegisAnsi.reset}`
-  if (risk === 'medium') return `${aegisAnsi.bgYellow} ${label} ${aegisAnsi.reset}`
-  return `${aegisAnsi.bgGreen} ${label} ${aegisAnsi.reset}`
 }
 
 export default Store => {
@@ -582,20 +567,15 @@ export default Store => {
       tabId = await store.resolveAegisTerminalTab(task.host_id)
       const sentinel = `__AEGIS_EXIT_${String(task.id).replace(/-/g, '_')}__`
       const markerFormat = [
+        '\\r\\033[2K\\033[1A\\r\\033[2K',
         `${aegisAnsi.bgMagenta} Aegis Agent ${aegisAnsi.reset}`,
-        `${aegisRiskBadge(task.risk)} actor=%s`,
         `${aegisAnsi.fgCyan}${aegisAnsi.bold}$ %s${aegisAnsi.reset}\\n`
       ].join(' ')
-      const successFormat = `${aegisAnsi.bgGreen} Aegis Agent completed ${aegisAnsi.reset} ${aegisAnsi.fgGreen}exit=%s${aegisAnsi.reset}\\n`
-      const failedFormat = `${aegisAnsi.bgRed} Aegis Agent failed ${aegisAnsi.reset} ${aegisAnsi.fgRed}exit=%s${aegisAnsi.reset}\\n`
-      const sentinelFormat = `${aegisAnsi.dim}%s=%s${aegisAnsi.reset}\\n`
       const wrapped = [
         'stty -echo 2>/dev/null || true',
-        `printf ${quotePosixSingle(markerFormat)} ${quotePosixSingle(task.actor_name || 'Aegis')} ${quotePosixSingle(task.command)}`,
+        `printf ${quotePosixSingle(markerFormat)} ${quotePosixSingle(task.command)}`,
         task.command,
         '__aegis_exit=$?',
-        `if [ "$__aegis_exit" -eq 0 ]; then printf ${quotePosixSingle(successFormat)} "$__aegis_exit"; else printf ${quotePosixSingle(failedFormat)} "$__aegis_exit"; fi`,
-        `printf ${quotePosixSingle(sentinelFormat)} ${quotePosixSingle(sentinel)} "$__aegis_exit"`,
         'stty echo 2>/dev/null || true'
       ].join('\n')
 
