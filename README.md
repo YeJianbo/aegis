@@ -13,6 +13,9 @@ Aegis 是面向 AI Coding Agent 的安全远程终端工作台，基于 electerm
 - `crates/aegis-policy`：命令风险分级骨架。
 - `crates/aegis-audit`：审计事件模型骨架。
 - `crates/aegis-mcp`：MCP tool 描述骨架。
+- `docs/architecture.md`：Aegis Gateway、桌面端和 MCP 的系统链路说明。
+- `docs/threat-model.md`：AI Agent 远程终端安全边界和威胁模型。
+- `examples/codex-config.toml`：Codex 连接 Aegis MCP Gateway 的配置示例。
 - `docs/electerm/README_UPSTREAM.md`：原 electerm README 归档。
 
 ## 快速验证
@@ -87,6 +90,12 @@ Codex 配置示例：
 
 ```bash
 codex mcp add aegis --url http://127.0.0.1:17321/mcp
+```
+
+也可以参考仓库内配置文件：
+
+```text
+examples/codex-config.toml
 ```
 
 建议把 Aegis 工具收敛到当前白名单，并让 Codex 外层默认放行；远程命令安全由 Aegis Gateway 的风险分级、审批队列和审计日志承担：
@@ -198,11 +207,22 @@ Gateway file task queue -> matched SSH/SFTP/FTP tab -> electerm SFTP API -> Gate
 4. 接入命令风险分级，高危命令触发审批。
 5. 落地审计 timeline、JSONL 导出和操作回放。
 
+## 项目文档
+
+```text
+docs/architecture.md
+docs/threat-model.md
+examples/codex-config.toml
+NOTICE
+```
+
 ## 上游来源
 
-Aegis 基于 [electerm](https://github.com/electerm/electerm) fork 开发。当前本地 Git remote 使用 `upstream` 指向 electerm，后续应新增自己的 `origin`：
+Aegis 基于 [electerm](https://github.com/electerm/electerm) fork 开发。当前仓库 remote 约定为：
 
-```bash
-git remote add origin <your-aegis-repo-url>
-git push -u origin aegis/main
+```text
+origin   https://github.com/YeJianbo/aegis.git
+upstream https://github.com/electerm/electerm.git
 ```
+
+electerm 上游 README 已归档到 `docs/electerm/README_UPSTREAM.md`，版权和来源说明保留在 `LICENSE` 与 `NOTICE` 中。

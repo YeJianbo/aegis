@@ -1,0 +1,23 @@
+name: Aegis CI
+
+on:
+  push:
+    branches:
+      - main
+      - aegis/main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gateway:
+    name: Rust gateway workspace
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test workspace
+        run: cargo test --workspace

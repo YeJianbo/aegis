@@ -34,23 +34,22 @@
   },
   "license": "MIT",
   "langugeRepo": "https://github.com/electerm/electerm-locales",
-  "privacyNoticeLink": "https://github.com/electerm/electerm/wiki/privacy-notice",
-  "knownIssuesLink": "https://github.com/electerm/electerm/wiki/Know-issues",
-  "sponsorLink": "https://electerm.html5beta.com/sponsor-electerm.html",
+  "privacyNoticeLink": "https://github.com/YeJianbo/aegis/blob/aegis/main/SECURITY.md",
+  "knownIssuesLink": "https://github.com/YeJianbo/aegis/issues",
+  "sponsorLink": "https://github.com/YeJianbo/aegis",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-org/aegis.git"
+    "url": "git+https://github.com/YeJianbo/aegis.git"
   },
   "author": {
-    "name": "ZHAO Xudong",
-    "email": "zxdong@gmail.com",
-    "url": "https://github.com/zxdong262"
+    "name": "Ye Jianbo",
+    "url": "https://github.com/YeJianbo"
   },
   "bugs": {
-    "url": "https://github.com/your-org/aegis/issues"
+    "url": "https://github.com/YeJianbo/aegis/issues"
   },
-  "homepage": "https://github.com/your-org/aegis",
-  "releases": "https://github.com/your-org/aegis/releases",
+  "homepage": "https://github.com/YeJianbo/aegis",
+  "releases": "https://github.com/YeJianbo/aegis/releases",
   "engines": {
     "node": ">=16.0.0"
   },
@@ -138,6 +137,7 @@
   "files": [
     "npm",
     "README.md",
+    "NOTICE",
     "LICENSE"
   ],
   "standard": {

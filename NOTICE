@@ -1,0 +1,19 @@
+Aegis
+=====
+
+Aegis is a secure remote terminal workspace for AI Coding Agents.
+
+Copyright (c) 2026 Ye Jianbo
+
+This project is based on electerm, an MIT-licensed terminal and file manager
+project originally created by ZHAO Xudong.
+
+Upstream project:
+https://github.com/electerm/electerm
+
+The upstream electerm license notice is preserved in LICENSE and the archived
+upstream README is kept at docs/electerm/README_UPSTREAM.md.
+
+Aegis adds the Rust Agent Gateway, MCP integration, command policy engine,
+approval workflow, audit timeline, and human-in-the-loop Agent terminal
+controls on top of the electerm desktop codebase.

@@ -1,0 +1,28 @@
+# Example Codex MCP configuration for Aegis.
+#
+# Start the Aegis Gateway widget in the desktop app first, then point Codex to
+# the local Gateway MCP endpoint.
+
+[mcp_servers.aegis]
+url = "http://127.0.0.1:17321/mcp"
+enabled_tools = [
+  "list_hosts",
+  "open_session",
+  "close_session",
+  "run_command",
+  "tail_log",
+  "get_terminal_snapshot",
+  "get_policy",
+  "update_policy",
+  "file_list",
+  "file_stat",
+  "file_read",
+  "file_write",
+  "file_delete",
+  "file_upload",
+  "file_download",
+]
+
+# Aegis handles command risk, approval, and audit internally.
+# Keep Codex-side tool approval lightweight for this local MCP server.
+default_tools_approval_mode = "approve"
