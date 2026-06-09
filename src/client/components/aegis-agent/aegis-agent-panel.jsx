@@ -3,6 +3,7 @@ import { auto } from 'manate/react'
 import {
   Alert,
   Button,
+  Collapse,
   Empty,
   Flex,
   Input,
@@ -408,47 +409,55 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
         }
       </section>
 
-      <section className='aegis-agent-section aegis-agent-history-section'>
-        <Flex justify='space-between' align='center' className='aegis-agent-section-title'>
-          <h3>History</h3>
-          <Tag>{historicalSessions.length}</Tag>
-        </Flex>
-        {
-          historicalSessions.length
-            ? (
-              <List
-                size='small'
-                dataSource={historicalSessions}
-                renderItem={item => (
-                  <List.Item className='aegis-agent-history-item'>
-                    <div className='aegis-agent-list-item'>
-                      <Flex justify='space-between' align='center'>
-                        <Tag color={item.paused ? 'orange' : 'default'}>
-                          {item.paused ? 'paused' : 'history'}
-                        </Tag>
-                        <span className='aegis-agent-muted'>{item.mode}</span>
-                      </Flex>
-                      <div className='aegis-agent-command' title={item.title}>
-                        {item.title}
+      <Collapse
+        ghost
+        size='small'
+        className='aegis-agent-history-collapse'
+        items={[
+          {
+            key: 'history',
+            label: (
+              <Flex justify='space-between' align='center'>
+                <span>History</span>
+                <Tag>{historicalSessions.length}</Tag>
+              </Flex>
+            ),
+            children: historicalSessions.length
+              ? (
+                <List
+                  size='small'
+                  dataSource={historicalSessions}
+                  renderItem={item => (
+                    <List.Item className='aegis-agent-history-item'>
+                      <div className='aegis-agent-list-item'>
+                        <Flex justify='space-between' align='center'>
+                          <Tag color={item.paused ? 'orange' : 'default'}>
+                            {item.paused ? 'paused' : 'history'}
+                          </Tag>
+                          <span className='aegis-agent-muted'>{item.mode}</span>
+                        </Flex>
+                        <div className='aegis-agent-command' title={item.title}>
+                          {item.title}
+                        </div>
+                        <Flex justify='space-between' align='center'>
+                          <span className='aegis-agent-muted'>{item.host_id}</span>
+                          <Button
+                            size='small'
+                            danger
+                            onClick={() => handleCloseSession(item)}
+                          >
+                            Remove
+                          </Button>
+                        </Flex>
                       </div>
-                      <Flex justify='space-between' align='center'>
-                        <span className='aegis-agent-muted'>{item.host_id}</span>
-                        <Button
-                          size='small'
-                          danger
-                          onClick={() => handleCloseSession(item)}
-                        >
-                          Remove
-                        </Button>
-                      </Flex>
-                    </div>
-                  </List.Item>
-                )}
-              />
-              )
-            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No historical sessions' />
-        }
-      </section>
+                    </List.Item>
+                  )}
+                />
+                )
+              : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='No historical sessions' />
+          }
+        ]}
+      />
 
       <section className='aegis-agent-section'>
         <h3>Audit Timeline</h3>
