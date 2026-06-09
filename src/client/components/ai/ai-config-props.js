@@ -6,5 +6,6 @@ export const aiConfigsArr = [
   'apiKeyAI',
   'apiPathAI',
   'languageAI',
-  'proxyAI'
+  'proxyAI',
+  'enableAIChatPanel'
 ]

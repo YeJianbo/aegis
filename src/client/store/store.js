@@ -104,10 +104,14 @@ class Store {
     const {
       rightPanelTab,
       config: {
-        baseURLAI
+        baseURLAI,
+        enableAIChatPanel
       }
     } = window.store
     if (rightPanelTab === 'ai') {
+      if (!enableAIChatPanel) {
+        return 'Aegis Agent'
+      }
       return getBrand(baseURLAI).brand || 'Custom AI Model'
     }
     if (rightPanelTab === 'agent') {

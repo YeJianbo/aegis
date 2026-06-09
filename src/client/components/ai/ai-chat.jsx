@@ -26,6 +26,7 @@ export default function AIChat (props) {
   const [prompt, setPrompt] = useState('')
   const [mode, setMode] = useState(() => getItem(aiChatModeLsKey) || 'ask')
   const [workspace, setWorkspace] = useState('chat')
+  const enableChat = !!props.config.enableAIChatPanel
   const isAgent = mode === 'agent'
 
   function handlePromptChange (e) {
@@ -43,7 +44,7 @@ export default function AIChat (props) {
   }
 
   const handleSubmit = useCallback(function () {
-    if (window.store.aiConfigMissing()) {
+    if (enableChat && window.store.aiConfigMissing()) {
       window.store.toggleAIConfig()
     }
     if (!prompt.trim()) return
@@ -77,7 +78,7 @@ export default function AIChat (props) {
     if (window.store.aiChatHistory.length > MAX_HISTORY) {
       window.store.aiChatHistory.splice(MAX_HISTORY)
     }
-  }, [prompt, mode])
+  }, [prompt, mode, enableChat])
 
   function renderHistory () {
     return (
@@ -123,16 +124,26 @@ export default function AIChat (props) {
       setPrompt,
       handleSubmit
     })
-    if (props.rightPanelTab === 'ai' && window.store.aiConfigMissing()) {
+    if (props.rightPanelTab === 'ai' && enableChat && window.store.aiConfigMissing()) {
       window.store.toggleAIConfig()
     }
     return () => {
       refsStatic.remove('AIChat')
     }
-  }, [handleSubmit])
+  }, [handleSubmit, enableChat, props.rightPanelTab])
 
   if (props.rightPanelTab !== 'ai') {
     return null
+  }
+
+  if (!enableChat) {
+    return (
+      <Flex vertical className='ai-chat-container ai-aegis-only'>
+        <Flex className='ai-chat-history' flex='auto'>
+          <AegisAgentPanel visible />
+        </Flex>
+      </Flex>
+    )
   }
 
   const handleKeyPress = (e) => {

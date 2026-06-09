@@ -4,7 +4,8 @@ import {
   Button,
   AutoComplete,
   Alert,
-  Space
+  Space,
+  Switch
 } from 'antd'
 import { useEffect, useState } from 'react'
 import Link from '../common/external-link'
@@ -134,6 +135,13 @@ export default function AIConfigForm ({ initialValues, onSubmit, showAIConfig })
         layout='vertical'
         className='ai-config-form'
       >
+        <Form.Item
+          label='Chat / Agent UI'
+          name='enableAIChatPanel'
+          valuePropName='checked'
+        >
+          <Switch />
+        </Form.Item>
         <Form.Item
           label='Name'
           name='nameAI'
