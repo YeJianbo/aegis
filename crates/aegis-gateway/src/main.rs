@@ -18,9 +18,9 @@ mod storage;
 use handlers::{
     claim_file_task, claim_terminal_command, classify, close_session, complete_file_task,
     complete_terminal_command, decide_approval, export_audit_events_jsonl, get_policy_config,
-    health, list_approvals, list_audit_events, list_hosts, list_sessions, open_session,
-    pause_session, resume_session, run_command, run_file_operation, set_policy_config,
-    set_session_mode, sync_hosts,
+    health, list_approvals, list_audit_events, list_hosts, list_policy_rules, list_sessions,
+    open_session, pause_session, resume_session, run_command, run_file_operation,
+    set_policy_config, set_session_mode, sync_hosts,
 };
 use mcp::{mcp_delete, mcp_endpoint, mcp_get};
 use state::AppState;
@@ -74,6 +74,7 @@ fn build_router(state: AppState) -> Router {
             post(decide_approval),
         )
         .route("/api/v1/policy/classify", post(classify))
+        .route("/api/v1/policy/rules", get(list_policy_rules))
         .route(
             "/api/v1/policy",
             get(get_policy_config).put(set_policy_config),

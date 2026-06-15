@@ -1,5 +1,5 @@
 use aegis_audit::{ApprovalStatus, AuditEvent};
-use aegis_policy::{CommandAssessment, RiskLevel, classify_command};
+use aegis_policy::{CommandAssessment, RiskLevel, classify_command_with_rules};
 use axum::http::StatusCode;
 use tokio::time::{Duration, sleep};
 use uuid::Uuid;
@@ -50,8 +50,8 @@ pub async fn submit_command(
     payload: RunCommandRequest,
 ) -> Result<CommandResponse, CommandFlowError> {
     let actor_name = payload.actor_name.unwrap_or_else(|| "Codex".to_owned());
-    let assessment = classify_command(&payload.command);
     let mut store = state.write().await;
+    let assessment = classify_command_with_rules(&payload.command, &store.command_rules);
     let decision = evaluate_policy(&payload.command, assessment.clone(), &store.policy);
     let session = store
         .sessions
@@ -173,7 +173,7 @@ pub async fn decide_approval_command(
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| approval_snapshot.command.clone());
     let assessment = {
-        let base = classify_command(&command);
+        let base = classify_command_with_rules(&command, &store.command_rules);
         evaluate_policy(&command, base, &store.policy).assessment
     };
 

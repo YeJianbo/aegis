@@ -1,5 +1,5 @@
 use aegis_audit::AuditEvent;
-use aegis_policy::{CommandAssessment, classify_command};
+use aegis_policy::{CommandAssessment, CommandRule, classify_command_with_rules};
 use axum::{
     Json,
     extract::{Path, State},
@@ -53,7 +53,7 @@ pub async fn classify(
     Json(payload): Json<ClassifyCommandRequest>,
 ) -> Json<CommandAssessment> {
     let store = state.read().await;
-    let assessment = classify_command(&payload.command);
+    let assessment = classify_command_with_rules(&payload.command, &store.command_rules);
     Json(evaluate_policy(&payload.command, assessment, &store.policy).assessment)
 }
 
@@ -228,6 +228,10 @@ pub async fn export_audit_events_jsonl(State(state): State<AppState>) -> impl In
 
 pub async fn get_policy_config(State(state): State<AppState>) -> Json<PolicyConfig> {
     Json(state.read().await.policy.clone())
+}
+
+pub async fn list_policy_rules(State(state): State<AppState>) -> Json<Vec<CommandRule>> {
+    Json(state.read().await.command_rules.clone())
 }
 
 pub async fn set_policy_config(

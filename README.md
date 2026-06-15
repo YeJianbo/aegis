@@ -17,6 +17,7 @@ Aegis 是面向 AI Coding Agent 的安全远程终端工作台，基于 electerm
 - `docs/threat-model.md`：AI Agent 远程终端安全边界和威胁模型。
 - `examples/codex-config.toml`：Codex 连接 Aegis MCP Gateway 的配置示例。
 - `examples/mcp-smoke-test.md`：MCP 最小闭环验收步骤。
+- `examples/policy-rules.yaml`：命令风险规则配置示例。
 - `docs/electerm/README_UPSTREAM.md`：原 electerm README 归档。
 
 ## 快速验证
@@ -45,6 +46,12 @@ AEGIS_GATEWAY_DB=/path/to/aegis-gateway.sqlite npm run gateway
 AEGIS_GATEWAY_DISABLE_DB=1 npm run gateway
 ```
 
+命令风险规则默认使用内置规则，也可以通过 YAML 文件覆盖：
+
+```bash
+AEGIS_POLICY_RULES=./examples/policy-rules.yaml npm run gateway
+```
+
 已提供的最小接口：
 
 ```text
@@ -66,6 +73,7 @@ POST /api/v1/terminal/commands/{command_id}/complete
 GET  /api/v1/approvals
 POST /api/v1/approvals/{approval_id}/decision
 POST /api/v1/policy/classify
+GET  /api/v1/policy/rules
 GET  /api/v1/policy
 PUT  /api/v1/policy
 GET  /api/v1/audit/events
@@ -229,6 +237,7 @@ docs/architecture.md
 docs/threat-model.md
 examples/codex-config.toml
 examples/mcp-smoke-test.md
+examples/policy-rules.yaml
 NOTICE
 ```
 

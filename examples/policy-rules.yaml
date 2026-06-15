@@ -1,0 +1,60 @@
+rules:
+  - name: destructive-filesystem
+    risk: critical
+    reason: 命中破坏性文件系统命令规则
+    patterns:
+      - "rm -rf"
+      - "mkfs"
+      - " dd "
+      - " dd if="
+      - " dd of="
+
+  - name: destructive-network-or-cluster
+    risk: critical
+    reason: 命中网络、集群或数据库破坏性操作规则
+    patterns:
+      - "iptables"
+      - " nft "
+      - "drop database"
+      - "truncate table"
+      - "kubectl delete"
+      - "helm uninstall"
+
+  - name: service-restart
+    risk: high
+    reason: 命中服务或容器重启规则
+    patterns:
+      - "systemctl restart"
+      - "service restart"
+      - "docker restart"
+      - "docker compose restart"
+      - "supervisorctl restart"
+
+  - name: recursive-permission-change
+    risk: high
+    reason: 命中递归权限或属主变更规则
+    patterns:
+      - "chmod -r"
+      - "chmod --recursive"
+      - "chown -r"
+      - "chown --recursive"
+
+  - name: environment-changing
+    risk: medium
+    reason: 命中会改变环境、依赖或运行状态的命令规则
+    patterns:
+      - "git pull"
+      - "npm install"
+      - "pnpm install"
+      - "yarn install"
+      - "pip install"
+      - "cargo install"
+      - "docker ps"
+      - "docker compose ps"
+
+  - name: process-manager-restart
+    risk: high
+    reason: 命中进程管理器重启规则
+    patterns:
+      - "pm2 restart"
+      - "pm2 reload"

@@ -1,7 +1,9 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use aegis_audit::AuditEvent;
+use aegis_policy::{CommandRule, default_rules, load_rules_from_yaml};
 use tokio::sync::RwLock;
+use tracing::{info, warn};
 
 use crate::{
     models::{
@@ -26,6 +28,7 @@ pub struct GatewayState {
     pub file_tasks: HashMap<uuid::Uuid, FileTask>,
     pub audit_events: Vec<AuditEvent>,
     pub policy: PolicyConfig,
+    pub command_rules: Vec<CommandRule>,
 }
 
 impl Default for AppState {
@@ -55,6 +58,7 @@ impl Default for GatewayState {
             file_tasks: HashMap::new(),
             audit_events: Vec::new(),
             policy: PolicyConfig::default(),
+            command_rules: default_rules(),
         }
     }
 }
@@ -69,12 +73,16 @@ impl AppState {
 
     pub async fn from_env() -> anyhow::Result<Self> {
         if std::env::var("AEGIS_GATEWAY_DISABLE_DB").as_deref() == Ok("1") {
-            return Ok(Self::default());
+            let state = Self::default();
+            state.load_command_rules_from_env().await;
+            return Ok(state);
         }
         let db_path = std::env::var("AEGIS_GATEWAY_DB")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("aegis-gateway.sqlite"));
-        Self::with_storage_path(db_path).await
+        let state = Self::with_storage_path(db_path).await?;
+        state.load_command_rules_from_env().await;
+        Ok(state)
     }
 
     pub async fn with_storage_path(path: PathBuf) -> anyhow::Result<Self> {
@@ -103,6 +111,28 @@ impl AppState {
         };
         let snapshot = self.read().await.snapshot();
         storage.save_snapshot(&snapshot).await
+    }
+
+    async fn load_command_rules_from_env(&self) {
+        let Ok(path) = std::env::var("AEGIS_POLICY_RULES") else {
+            return;
+        };
+        match load_rules_from_yaml(&path) {
+            Ok(rules) if !rules.is_empty() => {
+                let count = rules.len();
+                self.write().await.command_rules = rules;
+                info!(path, count, "loaded aegis command policy rules");
+            }
+            Ok(_) => {
+                warn!(
+                    path,
+                    "policy rules file contained no valid rules; using defaults"
+                );
+            }
+            Err(err) => {
+                warn!(path, %err, "failed to load policy rules file; using defaults");
+            }
+        }
     }
 }
 
@@ -154,6 +184,7 @@ impl From<GatewaySnapshot> for GatewayState {
             file_tasks: file_tasks.collect(),
             audit_events: snapshot.audit_events,
             policy: snapshot.policy,
+            command_rules: default_rules(),
         }
     }
 }

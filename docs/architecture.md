@@ -131,6 +131,25 @@ and critical risk. High and critical commands such as `systemctl restart`,
 `docker restart`, `chmod -R`, `rm -rf`, `iptables`, and destructive database or
 Kubernetes operations are routed to the approval queue.
 
+The classifier ships with default rules, but production or demo environments
+can replace them with a YAML rule file:
+
+```bash
+AEGIS_POLICY_RULES=./examples/policy-rules.yaml npm run gateway
+```
+
+Rule files use this shape:
+
+```yaml
+rules:
+  - name: service-restart
+    risk: high
+    reason: 命中服务或容器重启规则
+    patterns:
+      - "systemctl restart"
+      - "docker restart"
+```
+
 ## Session Model
 
 Each Aegis session is bound to a desktop-visible host and can be placed in one
@@ -176,6 +195,7 @@ POST   /api/v1/approvals/{approval_id}/decision
 GET    /api/v1/policy
 PUT    /api/v1/policy
 POST   /api/v1/policy/classify
+GET    /api/v1/policy/rules
 GET    /api/v1/audit/events
 GET    /api/v1/audit/events/export
 GET    /mcp
