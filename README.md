@@ -16,6 +16,7 @@ Aegis 是面向 AI Coding Agent 的安全远程终端工作台，基于 electerm
 - `docs/architecture.md`：Aegis Gateway、桌面端和 MCP 的系统链路说明。
 - `docs/threat-model.md`：AI Agent 远程终端安全边界和威胁模型。
 - `examples/codex-config.toml`：Codex 连接 Aegis MCP Gateway 的配置示例。
+- `examples/mcp-smoke-test.md`：MCP 最小闭环验收步骤。
 - `docs/electerm/README_UPSTREAM.md`：原 electerm README 归档。
 
 ## 快速验证
@@ -227,6 +228,7 @@ Gateway file task queue -> matched SSH/SFTP/FTP tab -> electerm SFTP API -> Gate
 docs/architecture.md
 docs/threat-model.md
 examples/codex-config.toml
+examples/mcp-smoke-test.md
 NOTICE
 ```
 
