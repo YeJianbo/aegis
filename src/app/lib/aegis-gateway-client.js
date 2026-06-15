@@ -75,6 +75,28 @@ async function listAuditEvents (baseUrl) {
   return requestGateway(baseUrl, '/api/v1/audit/events', { method: 'GET' })
 }
 
+async function exportAuditEventsJsonl (baseUrl) {
+  const url = normalizeBaseUrl(baseUrl) + '/api/v1/audit/events/export'
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/x-ndjson, text/plain'
+    }
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`
+    try {
+      const body = text ? JSON.parse(text) : null
+      msg = body && body.error ? body.error : msg
+    } catch (_) {
+      msg = text || msg
+    }
+    throw new Error(msg)
+  }
+  return text
+}
+
 async function getPolicyConfig (baseUrl) {
   return requestGateway(baseUrl, '/api/v1/policy', { method: 'GET' })
 }
@@ -137,6 +159,7 @@ module.exports = {
   listApprovals,
   decideApproval,
   listAuditEvents,
+  exportAuditEventsJsonl,
   getPolicyConfig,
   setPolicyConfig,
   claimTerminalCommand,

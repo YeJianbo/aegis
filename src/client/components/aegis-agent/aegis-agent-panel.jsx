@@ -20,6 +20,7 @@ import {
   ApiOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  DownloadOutlined,
   HistoryOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
@@ -113,6 +114,7 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
 
   const handleRefresh = () => store.refreshAegisGatewayStatus()
   const handleOpenWidgets = () => store.openWidgetsModal('aegis-gateway')
+  const handleExportAudit = () => store.exportAegisAuditEvents().catch(store.onError)
   const handleApproval = (item, allow, modifiedCommand) => {
     store.decideAegisApproval(item.id, allow, modifiedCommand).catch(store.onError)
   }
@@ -514,6 +516,13 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
               />
             </Tooltip>
           </Popover>
+          <Tooltip title='Export Audit'>
+            <Button
+              icon={<DownloadOutlined />}
+              size='small'
+              onClick={handleExportAudit}
+            />
+          </Tooltip>
           <Tooltip title='Refresh'>
             <Button
               icon={<ReloadOutlined />}

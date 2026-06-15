@@ -4,6 +4,7 @@
 
 import handleError from '../common/error-handler'
 import Modal from '../components/common/modal'
+import message from '../components/common/message'
 import { debounce, some, get, pickBy } from 'lodash-es'
 import {
   leftSidebarWidthKey,
@@ -697,6 +698,15 @@ export default Store => {
   Store.prototype.setAegisPolicy = async function (payload) {
     await window.pre.runGlobalAsync('aegisGatewaySetPolicy', payload)
     await window.store.refreshAegisGatewayStatus()
+  }
+
+  Store.prototype.exportAegisAuditEvents = async function () {
+    const result = await window.pre.runGlobalAsync('aegisGatewayExportAuditEvents')
+    if (!result || result.canceled) {
+      return result
+    }
+    message.success('Aegis audit exported')
+    return result
   }
 
   Store.prototype.explainWithAi = function (txt) {

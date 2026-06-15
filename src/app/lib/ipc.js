@@ -11,6 +11,7 @@ const {
   globalShortcut,
   shell
 } = require('electron')
+const fs = require('fs/promises')
 const globalState = require('./glob-state')
 const ipcSyncFuncs = require('./ipc-sync')
 const { dbAction } = require('./db')
@@ -94,6 +95,11 @@ const SAFE_ENV_KEYS = [
   'DBUS_SESSION_BUS_ADDRESS', 'DESKTOP_SESSION', 'GNOME_DESKTOP_SESSION_ID', 'KDE_FULL_SESSION',
   'CI', 'DOCKER_HOST', 'CONTAINER'
 ]
+
+function getAegisAuditExportName () {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  return `aegis-audit-${stamp}.jsonl`
+}
 
 async function initAppServer () {
   const {
@@ -241,6 +247,26 @@ function initIpc () {
       aegisGateway.decideApproval(undefined, approvalId, payload)
     ),
     aegisGatewayAuditEvents: () => aegisGateway.listAuditEvents(),
+    aegisGatewayExportAuditEvents: async () => {
+      const win = BrowserWindow.getFocusedWindow() || globalState.get('win')
+      const jsonl = await aegisGateway.exportAuditEventsJsonl()
+      const result = await dialog.showSaveDialog(win, {
+        title: 'Export Aegis Audit',
+        defaultPath: getAegisAuditExportName(),
+        filters: [
+          { name: 'JSON Lines', extensions: ['jsonl'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      })
+      if (result.canceled || !result.filePath) {
+        return { canceled: true }
+      }
+      await fs.writeFile(result.filePath, jsonl, 'utf8')
+      return {
+        canceled: false,
+        filePath: result.filePath
+      }
+    },
     aegisGatewayClassify: (command) => aegisGateway.classifyCommand(undefined, command),
     aegisGatewayPolicy: () => aegisGateway.getPolicyConfig(),
     aegisGatewaySetPolicy: (payload) => aegisGateway.setPolicyConfig(undefined, payload),
