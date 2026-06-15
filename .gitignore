@@ -119,6 +119,7 @@ dist
 
 aegis-gateway.sqlite
 aegis-gateway.sqlite-*
+*aegis*-audit.jsonl
 
 ftp-root
 *.asc
