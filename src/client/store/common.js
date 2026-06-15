@@ -49,6 +49,24 @@ function getAegisTerminalSender (terminalRef) {
   return null
 }
 
+function describeAegisTerminalTransport (tabId) {
+  const tab = window.store?.tabs?.find(item => item.id === tabId)
+  const terminalRef = refs.get('term-' + tabId)
+  const attachAddon = terminalRef?.attachAddon
+  const socket = attachAddon?._socket || attachAddon?.socket || terminalRef?.socket
+  return [
+    `tab=${tabId}`,
+    `type=${tab?.type || 'unknown'}`,
+    `host=${tab?.host || 'unknown'}`,
+    `status=${tab?.status || 'unknown'}`,
+    `pane=${tab?.pane || 'unknown'}`,
+    `term=${terminalRef?.term ? 'yes' : 'no'}`,
+    `attach=${attachAddon ? 'yes' : 'no'}`,
+    `send=${typeof attachAddon?._sendData === 'function' ? 'yes' : 'no'}`,
+    `socket=${socket?.readyState ?? 'none'}`
+  ].join(', ')
+}
+
 async function waitForAegisTerminalSender (tabId, timeout = 20000) {
   const started = Date.now()
   while (Date.now() - started < timeout) {
@@ -59,7 +77,7 @@ async function waitForAegisTerminalSender (tabId, timeout = 20000) {
     }
     await sleep(300)
   }
-  throw new Error(`Terminal transport not ready for tab: ${tabId}`)
+  throw new Error(`Terminal transport not ready: ${describeAegisTerminalTransport(tabId)}`)
 }
 
 function isUsableSshTab (tab) {
@@ -84,6 +102,14 @@ function activateAegisTab (store, tab) {
   if (tab.batch !== undefined) {
     store[`activeTabId${tab.batch}`] = tab.id
     store.currentLayoutBatch = tab.batch
+  }
+}
+
+function ensureAegisTerminalPane (store, tabId) {
+  const tab = store.tabs.find(item => item.id === tabId)
+  if (tab && tab.pane !== paneMap.terminal) {
+    store.updateTab(tabId, { pane: paneMap.terminal })
+    store.triggerResize?.()
   }
 }
 
@@ -586,7 +612,8 @@ export default Store => {
     try {
       tabId = await store.resolveAegisTerminalTab(task.host_id)
       const sentinel = `__AEGIS_EXIT_${String(task.id).replace(/-/g, '_')}__`
-      const { terminalRef, send } = await waitForAegisTerminalSender(tabId)
+      ensureAegisTerminalPane(store, tabId)
+      const { terminalRef, send } = await waitForAegisTerminalSender(tabId, 45000)
       terminalRef.term.write(`\r\x1b[2K\x1b[45;97m Aegis Agent \x1b[0m \x1b[36m\x1b[1m$ ${task.command}\x1b[0m\r\n`)
       terminalRef.attachAddon?.startAegisEchoFilter?.(task.command)
       send(`${task.command}\r`)
@@ -627,10 +654,6 @@ export default Store => {
     if (existing) {
       activateAegisTab(store, existing)
       return existing.id
-    }
-
-    if (isUsableSshTab(current)) {
-      return store.activeTabId
     }
 
     const bookmark = store.bookmarks.find(item => item.id === hostId)
