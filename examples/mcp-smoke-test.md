@@ -16,11 +16,13 @@ second terminal after Gateway starts:
 
 ```bash
 npm run gateway:smoke
+npm run gateway:mcp-smoke
 ```
 
-The script verifies `/health`, host sync, guarded policy, command
-classification, low-risk command queueing, high-risk approval creation, and
-JSONL audit export.
+`gateway:smoke` verifies the REST API and audit export. `gateway:mcp-smoke`
+verifies the MCP path with `initialize`, `tools/list`, and `tools/call` for
+`list_hosts`, `open_session`, `run_command`, `get_terminal_snapshot`, and
+`close_session`.
 
 ## 1. Start Gateway
 

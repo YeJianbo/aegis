@@ -18,6 +18,7 @@ Aegis 是面向 AI Coding Agent 的安全远程终端工作台，基于 electerm
 - `examples/codex-config.toml`：Codex 连接 Aegis MCP Gateway 的配置示例。
 - `examples/mcp-smoke-test.md`：MCP 最小闭环验收步骤。
 - `examples/policy-rules.yaml`：命令风险规则配置示例。
+- `scripts/aegis-mcp-smoke.ps1`：MCP tools/call 自动验收脚本。
 - `scripts/aegis-smoke.ps1`：Gateway 本地 smoke 检查脚本。
 - `demo/nginx-lab`：AI 排查 nginx 启动失败的本地演示场景。
 - `docs/electerm/README_UPSTREAM.md`：原 electerm README 归档。
@@ -33,6 +34,7 @@ Gateway 启动后，可在另一个终端运行本地 smoke 检查：
 
 ```bash
 npm run gateway:smoke
+npm run gateway:mcp-smoke
 ```
 
 Gateway 默认监听：
