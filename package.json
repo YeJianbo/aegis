@@ -1,6 +1,7 @@
 {
   "name": "aegis",
   "version": "0.1.0",
+  "productName": "Aegis",
   "description": "Secure remote terminal workspace for AI coding agents, based on electerm",
   "main": "app.js",
   "bin": "npm/electerm",

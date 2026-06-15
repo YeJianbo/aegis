@@ -50,7 +50,7 @@ require('fs').writeFileSync(
   )
 )
 
-exec(`cd work/app && npm i --omit=dev && cd ${cwd}`)
+exec(`cd work/app && npm i --omit=dev --legacy-peer-deps && cd ${cwd}`)
 rm('-rf', 'work/app/node_modules/.bin')
 // Remove axios browser/ESM builds and unnecessary files (keep only lib/ and node CJS)
 rm('-rf', 'work/app/node_modules/axios/dist/esm')
@@ -101,7 +101,11 @@ rm('-rf', 'work/app/node_modules/node-pty/lib/testUtils.test.js.map')
 
 // yarn auto clean
 cp('-r', 'build/bin/.yarnclean', 'work/app/')
-exec(`cd work/app && yarn generate-lock-entry > yarn.lock && yarn autoclean --force && cd ${cwd}`)
+if (exec('yarn --version', { silent: true }).code === 0) {
+  exec(`cd work/app && yarn generate-lock-entry > yarn.lock && yarn autoclean --force && cd ${cwd}`)
+} else {
+  echo('skip yarn autoclean: yarn is not available')
+}
 rm('-rf', 'work/app/.yarnclean')
 rm('-rf', 'work/app/package-lock.json')
 rm('-rf', 'work/app/yarn.lock')

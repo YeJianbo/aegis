@@ -1,5 +1,5 @@
 {
-  "appId": "org.electerm.electerm",
+  "appId": "io.github.yejianbo.aegis",
   "directories": {
     "app": "work/app",
     "output": "dist",
