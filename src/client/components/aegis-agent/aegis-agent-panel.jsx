@@ -95,6 +95,7 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
   const { store } = window
   const status = store.aegisGatewayStatus
   const [policyDraft, setPolicyDraft] = useState(policyToDraft(status.policy))
+  const [reviewApproval, setReviewApproval] = useState(null)
 
   useEffect(() => {
     if (visible || rightPanelTab === 'agent') {
@@ -115,6 +116,12 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
   const handleApproval = (item, allow, modifiedCommand) => {
     store.decideAegisApproval(item.id, allow, modifiedCommand).catch(store.onError)
   }
+  const closeReviewApproval = () => setReviewApproval(null)
+  const handleReviewApproval = item => setReviewApproval(item)
+  const handleReviewDecision = (item, allow, modifiedCommand) => {
+    closeReviewApproval()
+    handleApproval(item, allow, modifiedCommand)
+  }
   const handleModifyApproval = item => {
     let command = item.command
     Modal.confirm({
@@ -130,8 +137,25 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
       ),
       okText: 'Allow Modified',
       cancelText: 'Cancel',
-      onOk: () => handleApproval(item, true, command)
+      onOk: () => handleReviewDecision(item, true, command)
     })
+  }
+  const handleWhitelistApproval = item => {
+    const command = String(item.command || '').trim()
+    if (!command) return
+    const policy = status.policy || {}
+    const whitelist = Array.from(new Set([
+      ...(policy.whitelist || []),
+      command
+    ]))
+    closeReviewApproval()
+    store.setAegisPolicy({
+      mode: policy.mode || 'guarded',
+      whitelist,
+      blacklist: policy.blacklist || []
+    })
+      .then(() => store.decideAegisApproval(item.id, true))
+      .catch(store.onError)
   }
   const handleSessionPauseToggle = session => {
     const action = session.paused ? store.resumeAegisSession : store.pauseAegisSession
@@ -178,6 +202,14 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
       }
     })
   const historicalSessions = status.sessions.filter(item => !usedSessionIds.has(item.id))
+
+  function findSessionById (sessionId) {
+    return status.sessions.find(item => item.id === sessionId)
+  }
+
+  function findHostById (hostId) {
+    return status.hosts.find(item => item.id === hostId)
+  }
 
   function renderSessionControls (session) {
     return (
@@ -317,8 +349,14 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
                 <Space className='aegis-agent-actions'>
                   <Button
                     size='small'
+                    onClick={() => handleReviewApproval(item)}
+                  >
+                    Review
+                  </Button>
+                  <Button
+                    size='small'
                     type='primary'
-                    onClick={() => handleApproval(item, true)}
+                    onClick={() => handleReviewDecision(item, true)}
                   >
                     Allow
                   </Button>
@@ -331,7 +369,7 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
                   <Button
                     size='small'
                     danger
-                    onClick={() => handleApproval(item, false)}
+                    onClick={() => handleReviewDecision(item, false)}
                   >
                     Deny
                   </Button>
@@ -377,6 +415,58 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
         <span>{title}</span>
         <Tag>{count}</Tag>
       </span>
+    )
+  }
+
+  function renderApprovalReviewModal () {
+    if (!reviewApproval) {
+      return null
+    }
+    const session = findSessionById(reviewApproval.session_id)
+    const host = findHostById(session?.host_id)
+    const assessment = reviewApproval.assessment || {}
+    return (
+      <Modal
+        open
+        title='Review Approval'
+        onCancel={closeReviewApproval}
+        footer={[
+          <Button key='deny' danger onClick={() => handleReviewDecision(reviewApproval, false)}>
+            Deny
+          </Button>,
+          <Button key='modify' onClick={() => handleModifyApproval(reviewApproval)}>
+            Modify
+          </Button>,
+          <Button key='whitelist' onClick={() => handleWhitelistApproval(reviewApproval)}>
+            Whitelist & Allow
+          </Button>,
+          <Button key='allow' type='primary' onClick={() => handleReviewDecision(reviewApproval, true)}>
+            Allow once
+          </Button>
+        ]}
+      >
+        <div className='aegis-agent-approval-review'>
+          <Flex justify='space-between' align='center'>
+            <Tag color={riskColor(assessment.risk)}>{assessment.risk}</Tag>
+            <span className='aegis-agent-muted'>{reviewApproval.actor_name}</span>
+          </Flex>
+          <div className='aegis-agent-review-command'>
+            {reviewApproval.command}
+          </div>
+          <div className='aegis-agent-review-grid'>
+            <span>Host</span>
+            <strong>{host?.name || session?.host_id || 'Unknown'}</strong>
+            <span>Address</span>
+            <strong>{host?.address || 'Unknown'}</strong>
+            <span>Session</span>
+            <strong>{session?.title || reviewApproval.session_id}</strong>
+            <span>Rule</span>
+            <strong>{assessment.matched_rule || 'policy'}</strong>
+            <span>Reason</span>
+            <strong>{assessment.reason || 'No reason provided'}</strong>
+          </div>
+        </div>
+      </Modal>
     )
   }
 
@@ -537,6 +627,7 @@ export default auto(function AegisAgentPanel ({ rightPanelTab, visible }) {
           }
         ]}
       />
+      {renderApprovalReviewModal()}
     </div>
   )
 })
