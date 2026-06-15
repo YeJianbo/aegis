@@ -31,25 +31,31 @@ pub async fn submit_file_operation(
         .ok_or_else(|| CommandFlowError::not_found("session not found"))?;
 
     if session.paused {
-        return Ok(blocked_file_response(
+        let response = blocked_file_response(
             &mut store,
             &session,
             &actor_name,
             payload.operation,
             "Agent 已暂停，文件操作未执行",
             "blocked: agent paused",
-        ));
+        );
+        drop(store);
+        persist_state(&state).await?;
+        return Ok(response);
     }
 
     if matches!(session.mode, SessionMode::HumanOnly) {
-        return Ok(blocked_file_response(
+        let response = blocked_file_response(
             &mut store,
             &session,
             &actor_name,
             payload.operation,
             "当前会话由人工接管，文件操作未执行",
             "blocked: session is human-only",
-        ));
+        );
+        drop(store);
+        persist_state(&state).await?;
+        return Ok(response);
     }
 
     if matches!(session.mode, SessionMode::AgentReadOnly)
@@ -58,20 +64,30 @@ pub async fn submit_file_operation(
             FileOperationKind::Upload | FileOperationKind::Delete | FileOperationKind::WriteFile
         )
     {
-        return Ok(blocked_file_response(
+        let response = blocked_file_response(
             &mut store,
             &session,
             &actor_name,
             payload.operation,
             "只读模式禁止写入远程文件",
             "blocked: session is read-only",
-        ));
+        );
+        drop(store);
+        persist_state(&state).await?;
+        return Ok(response);
     }
 
     validate_file_payload(&payload)?;
     let task = enqueue_file_task(&mut store, &session, actor_name, payload);
     drop(store);
+    persist_state(&state).await?;
     wait_for_file_task(state, task.id).await
+}
+
+async fn persist_state(state: &AppState) -> Result<(), CommandFlowError> {
+    state.persist().await.map_err(|err| {
+        CommandFlowError::internal(format!("failed to persist gateway state: {err}"))
+    })
 }
 
 fn validate_file_payload(payload: &FileOperationRequest) -> Result<(), CommandFlowError> {

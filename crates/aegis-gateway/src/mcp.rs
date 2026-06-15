@@ -228,6 +228,8 @@ async fn open_session_for_mcp(
     }
     let session = new_session(host_id, title);
     store.sessions.insert(session.id.clone(), session.clone());
+    drop(store);
+    persist_state(state).await?;
     Ok(session)
 }
 
@@ -257,6 +259,8 @@ async fn close_session_for_mcp(
                 FileTaskStatus::Pending | FileTaskStatus::Running
             ))
     });
+    drop(store);
+    persist_state(state).await?;
     Ok(session)
 }
 
@@ -327,7 +331,10 @@ async fn update_policy_for_mcp(
     if let Some(blacklist) = payload.blacklist {
         store.policy.blacklist = normalize_patterns(blacklist);
     }
-    Ok(store.policy.clone())
+    let policy = store.policy.clone();
+    drop(store);
+    persist_state(state).await?;
+    Ok(policy)
 }
 
 async fn file_operation_for_mcp(
@@ -435,6 +442,13 @@ fn invalid_params(message: impl Into<String>) -> JsonRpcError {
         code: -32602,
         message: message.into(),
     }
+}
+
+async fn persist_state(state: &AppState) -> Result<(), JsonRpcError> {
+    state.persist().await.map_err(|err| JsonRpcError {
+        code: -32603,
+        message: format!("failed to persist gateway state: {err}"),
+    })
 }
 
 fn normalize_patterns(patterns: Vec<String>) -> Vec<String> {

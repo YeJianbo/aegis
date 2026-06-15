@@ -3,9 +3,11 @@ use aegis_policy::{CommandAssessment, classify_command};
 use axum::{
     Json,
     extract::{Path, State},
-    http::StatusCode,
+    http::{StatusCode, header},
+    response::IntoResponse,
 };
 use serde::Serialize;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::{
@@ -63,14 +65,18 @@ pub async fn sync_hosts(
     State(state): State<AppState>,
     Json(payload): Json<SyncHostsRequest>,
 ) -> Json<Vec<HostSummary>> {
-    let mut store = state.write().await;
-    store.hosts = payload
-        .hosts
-        .into_iter()
-        .filter(|host| !host.id.trim().is_empty() && !host.address.trim().is_empty())
-        .map(|host| (host.id.clone(), host))
-        .collect();
-    Json(store.hosts.values().cloned().collect())
+    let hosts = {
+        let mut store = state.write().await;
+        store.hosts = payload
+            .hosts
+            .into_iter()
+            .filter(|host| !host.id.trim().is_empty() && !host.address.trim().is_empty())
+            .map(|host| (host.id.clone(), host))
+            .collect();
+        store.hosts.values().cloned().collect()
+    };
+    persist_or_log(&state).await;
+    Json(hosts)
 }
 
 pub async fn open_session(
@@ -84,6 +90,8 @@ pub async fn open_session(
 
     let session = new_session(payload.host_id, payload.title);
     store.sessions.insert(session.id.clone(), session.clone());
+    drop(store);
+    persist_or_error(&state).await?;
     Ok(Json(session))
 }
 
@@ -117,6 +125,8 @@ pub async fn close_session(
                 FileTaskStatus::Pending | FileTaskStatus::Running
             ))
     });
+    drop(store);
+    persist_or_error(&state).await?;
     Ok(Json(session))
 }
 
@@ -145,7 +155,10 @@ pub async fn set_session_mode(
         .get_mut(&session_id)
         .ok_or_else(|| not_found("session not found"))?;
     session.mode = payload.mode.into();
-    Ok(Json(session.clone()))
+    let session = session.clone();
+    drop(store);
+    persist_or_error(&state).await?;
+    Ok(Json(session))
 }
 
 pub async fn run_command(
@@ -187,6 +200,32 @@ pub async fn list_audit_events(State(state): State<AppState>) -> Json<Vec<AuditE
     Json(state.read().await.audit_events.clone())
 }
 
+pub async fn export_audit_events_jsonl(State(state): State<AppState>) -> impl IntoResponse {
+    let events = state.read().await.audit_events.clone();
+    let mut body = String::new();
+    for event in events {
+        match serde_json::to_string(&event) {
+            Ok(line) => {
+                body.push_str(&line);
+                body.push('\n');
+            }
+            Err(err) => {
+                error!(%err, "failed to serialize audit event");
+            }
+        }
+    }
+    (
+        [
+            (header::CONTENT_TYPE, "application/x-ndjson; charset=utf-8"),
+            (
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=\"aegis-audit.jsonl\"",
+            ),
+        ],
+        body,
+    )
+}
+
 pub async fn get_policy_config(State(state): State<AppState>) -> Json<PolicyConfig> {
     Json(state.read().await.policy.clone())
 }
@@ -195,17 +234,21 @@ pub async fn set_policy_config(
     State(state): State<AppState>,
     Json(payload): Json<UpdatePolicyConfigRequest>,
 ) -> Json<PolicyConfig> {
-    let mut store = state.write().await;
-    if let Some(mode) = payload.mode {
-        store.policy.mode = mode;
-    }
-    if let Some(whitelist) = payload.whitelist {
-        store.policy.whitelist = normalize_patterns(whitelist);
-    }
-    if let Some(blacklist) = payload.blacklist {
-        store.policy.blacklist = normalize_patterns(blacklist);
-    }
-    Json(store.policy.clone())
+    let policy = {
+        let mut store = state.write().await;
+        if let Some(mode) = payload.mode {
+            store.policy.mode = mode;
+        }
+        if let Some(whitelist) = payload.whitelist {
+            store.policy.whitelist = normalize_patterns(whitelist);
+        }
+        if let Some(blacklist) = payload.blacklist {
+            store.policy.blacklist = normalize_patterns(blacklist);
+        }
+        store.policy.clone()
+    };
+    persist_or_log(&state).await;
+    Json(policy)
 }
 
 pub async fn claim_terminal_command(
@@ -218,7 +261,10 @@ pub async fn claim_terminal_command(
         .find(|task| matches!(task.status, TerminalCommandStatus::Pending));
     if let Some(task) = task {
         task.status = TerminalCommandStatus::Running;
-        return Json(Some(task.clone()));
+        let task = task.clone();
+        drop(store);
+        persist_or_log(&state).await;
+        return Json(Some(task));
     }
     Json(None)
 }
@@ -263,6 +309,8 @@ pub async fn complete_terminal_command(
             .or_else(|| completed.output.clone());
     }
 
+    drop(store);
+    persist_or_error(&state).await?;
     Ok(Json(completed))
 }
 
@@ -274,7 +322,10 @@ pub async fn claim_file_task(State(state): State<AppState>) -> Json<Option<FileT
         .find(|task| matches!(task.status, FileTaskStatus::Pending));
     if let Some(task) = task {
         task.status = FileTaskStatus::Running;
-        return Json(Some(task.clone()));
+        let task = task.clone();
+        drop(store);
+        persist_or_log(&state).await;
+        return Json(Some(task));
     }
     Json(None)
 }
@@ -327,6 +378,8 @@ pub async fn complete_file_task(
             });
     }
 
+    drop(store);
+    persist_or_error(&state).await?;
     Ok(Json(completed))
 }
 
@@ -341,7 +394,10 @@ async fn set_paused(
         .get_mut(&session_id)
         .ok_or_else(|| not_found("session not found"))?;
     session.paused = paused;
-    Ok(Json(session.clone()))
+    let session = session.clone();
+    drop(store);
+    persist_or_error(&state).await?;
+    Ok(Json(session))
 }
 
 fn not_found(message: &str) -> (StatusCode, Json<ErrorResponse>) {
@@ -355,6 +411,28 @@ fn not_found(message: &str) -> (StatusCode, Json<ErrorResponse>) {
 
 fn flow_error(err: CommandFlowError) -> (StatusCode, Json<ErrorResponse>) {
     (err.status, Json(ErrorResponse { error: err.message }))
+}
+
+async fn persist_or_error(state: &AppState) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    state.persist().await.map_err(|err| {
+        error!(%err, "failed to persist gateway state");
+        internal_error("failed to persist gateway state")
+    })
+}
+
+async fn persist_or_log(state: &AppState) {
+    if let Err(err) = state.persist().await {
+        error!(%err, "failed to persist gateway state");
+    }
+}
+
+fn internal_error(message: &str) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorResponse {
+            error: message.to_owned(),
+        }),
+    )
 }
 
 fn normalize_patterns(patterns: Vec<String>) -> Vec<String> {

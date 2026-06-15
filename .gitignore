@@ -117,6 +117,9 @@ dist
 /test-results
 /target/
 
+aegis-gateway.sqlite
+aegis-gateway.sqlite-*
+
 ftp-root
 *.asc
 /electron-builder.json

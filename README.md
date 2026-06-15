@@ -31,6 +31,19 @@ Gateway 默认监听：
 http://127.0.0.1:17321
 ```
 
+Gateway 默认使用当前运行目录下的 SQLite 文件持久化状态：
+
+```text
+aegis-gateway.sqlite
+```
+
+可通过环境变量覆盖：
+
+```bash
+AEGIS_GATEWAY_DB=/path/to/aegis-gateway.sqlite npm run gateway
+AEGIS_GATEWAY_DISABLE_DB=1 npm run gateway
+```
+
 已提供的最小接口：
 
 ```text
@@ -55,6 +68,7 @@ POST /api/v1/policy/classify
 GET  /api/v1/policy
 PUT  /api/v1/policy
 GET  /api/v1/audit/events
+GET  /api/v1/audit/events/export
 GET/POST/DELETE /mcp
 ```
 

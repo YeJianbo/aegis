@@ -36,6 +36,13 @@ impl CommandFlowError {
             message: message.into(),
         }
     }
+
+    pub(crate) fn internal(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: message.into(),
+        }
+    }
 }
 
 pub async fn submit_command(
@@ -53,7 +60,7 @@ pub async fn submit_command(
         .ok_or_else(|| CommandFlowError::not_found("session not found"))?;
 
     if let Some(reason) = decision.blocked_reason {
-        return Ok(blocked_response(
+        let response = blocked_response(
             &mut store,
             &session,
             &actor_name,
@@ -61,11 +68,14 @@ pub async fn submit_command(
             decision.assessment,
             &reason,
             &format!("blocked: {reason}"),
-        ));
+        );
+        drop(store);
+        persist_state(&state).await?;
+        return Ok(response);
     }
 
     if session.paused {
-        return Ok(blocked_response(
+        let response = blocked_response(
             &mut store,
             &session,
             &actor_name,
@@ -73,11 +83,14 @@ pub async fn submit_command(
             decision.assessment,
             "Agent 已暂停，命令未执行",
             "blocked: agent paused",
-        ));
+        );
+        drop(store);
+        persist_state(&state).await?;
+        return Ok(response);
     }
 
     if !matches!(session.mode, SessionMode::AgentWritable) {
-        return Ok(blocked_response(
+        let response = blocked_response(
             &mut store,
             &session,
             &actor_name,
@@ -85,7 +98,10 @@ pub async fn submit_command(
             decision.assessment,
             "当前会话不允许 Agent 写入",
             "blocked: session is not agent-writable",
-        ));
+        );
+        drop(store);
+        persist_state(&state).await?;
+        return Ok(response);
     }
 
     if decision.assessment.approval_required {
@@ -108,7 +124,7 @@ pub async fn submit_command(
         );
         store.approvals.insert(approval.id, approval.clone());
         store.audit_events.push(event.clone());
-        return Ok(CommandResponse {
+        let response = CommandResponse {
             status: CommandStatus::ApprovalPending,
             session_id: session.id,
             assessment: decision.assessment,
@@ -116,7 +132,10 @@ pub async fn submit_command(
             audit_event: event,
             output: None,
             terminal_command_id: None,
-        });
+        };
+        drop(store);
+        persist_state(&state).await?;
+        return Ok(response);
     }
 
     let task = enqueue_terminal_command(
@@ -128,6 +147,7 @@ pub async fn submit_command(
         ApprovalStatus::NotRequired,
     );
     drop(store);
+    persist_state(&state).await?;
     wait_for_terminal_command(state, task.id, session.id, decision.assessment, None).await
 }
 
@@ -170,7 +190,7 @@ pub async fn decide_approval_command(
             Some("人工拒绝执行".to_owned()),
         );
         store.audit_events.push(event.clone());
-        return Ok(CommandResponse {
+        let response = CommandResponse {
             status: CommandStatus::Blocked,
             session_id: session.id,
             assessment,
@@ -178,7 +198,10 @@ pub async fn decide_approval_command(
             audit_event: event,
             output: Some("denied by human".to_owned()),
             terminal_command_id: None,
-        });
+        };
+        drop(store);
+        persist_state(&state).await?;
+        return Ok(response);
     }
 
     let approval_status = if command == approval_snapshot.command {
@@ -202,12 +225,19 @@ pub async fn decide_approval_command(
         approval_status,
     );
     drop(store);
+    persist_state(&state).await?;
     wait_for_terminal_command(state, task.id, session.id, assessment, Some(approval_id)).await
 }
 
 pub(crate) struct PolicyDecision {
     pub assessment: CommandAssessment,
     pub blocked_reason: Option<String>,
+}
+
+async fn persist_state(state: &AppState) -> Result<(), CommandFlowError> {
+    state.persist().await.map_err(|err| {
+        CommandFlowError::internal(format!("failed to persist gateway state: {err}"))
+    })
 }
 
 pub(crate) fn evaluate_policy(

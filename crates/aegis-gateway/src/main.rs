@@ -13,12 +13,14 @@ mod handlers;
 mod mcp;
 mod models;
 mod state;
+mod storage;
 
 use handlers::{
     claim_file_task, claim_terminal_command, classify, close_session, complete_file_task,
-    complete_terminal_command, decide_approval, get_policy_config, health, list_approvals,
-    list_audit_events, list_hosts, list_sessions, open_session, pause_session, resume_session,
-    run_command, run_file_operation, set_policy_config, set_session_mode, sync_hosts,
+    complete_terminal_command, decide_approval, export_audit_events_jsonl, get_policy_config,
+    health, list_approvals, list_audit_events, list_hosts, list_sessions, open_session,
+    pause_session, resume_session, run_command, run_file_operation, set_policy_config,
+    set_session_mode, sync_hosts,
 };
 use mcp::{mcp_delete, mcp_endpoint, mcp_get};
 use state::AppState;
@@ -32,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let app = build_router(AppState::default());
+    let app = build_router(AppState::from_env().await?);
     let addr = SocketAddr::from(([127, 0, 0, 1], 17321));
     let listener = TcpListener::bind(addr).await?;
 
@@ -77,6 +79,10 @@ fn build_router(state: AppState) -> Router {
             get(get_policy_config).put(set_policy_config),
         )
         .route("/api/v1/audit/events", get(list_audit_events))
+        .route(
+            "/api/v1/audit/events/export",
+            get(export_audit_events_jsonl),
+        )
         .route("/mcp", get(mcp_get).post(mcp_endpoint).delete(mcp_delete))
         .with_state(state)
 }

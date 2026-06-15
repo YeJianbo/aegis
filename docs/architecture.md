@@ -43,6 +43,7 @@ src/app/lib/aegis-gateway-client.js
 
 crates/aegis-gateway
   Axum/Tokio service, HTTP API, MCP endpoint, queues, approvals, shared state
+  and SQLite-backed snapshot persistence
 
 crates/aegis-policy
   command risk classifier, guarded/full-allow modes, whitelist, blacklist
@@ -153,6 +154,10 @@ terminal tab and audit context.
 
 The Gateway listens on `127.0.0.1:17321` by default.
 
+By default the Gateway persists recoverable state to `aegis-gateway.sqlite`
+in the current working directory. Use `AEGIS_GATEWAY_DB` to override the file
+path, or `AEGIS_GATEWAY_DISABLE_DB=1` for a purely in-memory development run.
+
 ```text
 GET    /health
 GET    /api/v1/hosts
@@ -172,10 +177,15 @@ GET    /api/v1/policy
 PUT    /api/v1/policy
 POST   /api/v1/policy/classify
 GET    /api/v1/audit/events
+GET    /api/v1/audit/events/export
 GET    /mcp
 POST   /mcp
 DELETE /mcp
 ```
+
+The export endpoint returns newline-delimited JSON with content type
+`application/x-ndjson`, suitable for audit review, replay tooling, or attaching
+to a demo report.
 
 ## MCP Tools
 
