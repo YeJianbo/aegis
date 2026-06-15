@@ -8,6 +8,7 @@
     "app": "node build/bin/app",
     "build": "npm run vite-build",
     "gateway": "cargo run -p aegis-gateway",
+    "gateway:build": "cargo build -p aegis-gateway --release",
     "gateway:mcp-smoke": "powershell -ExecutionPolicy Bypass -File scripts/aegis-mcp-smoke.ps1",
     "gateway:smoke": "powershell -ExecutionPolicy Bypass -File scripts/aegis-smoke.ps1",
     "gateway:test": "cargo test --workspace",

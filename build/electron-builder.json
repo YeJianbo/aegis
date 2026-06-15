@@ -5,6 +5,16 @@
     "output": "dist",
     "buildResources": "node_modules/@electerm/electerm-resource/build-res"
   },
+  "extraResources": [
+    {
+      "from": "target/release",
+      "to": "aegis-gateway",
+      "filter": [
+        "aegis-gateway",
+        "aegis-gateway.exe"
+      ]
+    }
+  ],
   "electronLanguages": [
     "en-US"
   ],

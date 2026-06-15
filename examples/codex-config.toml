@@ -1,7 +1,8 @@
 # Example Codex MCP configuration for Aegis.
 #
-# Start the Aegis Gateway widget in the desktop app first, then point Codex to
-# the local Gateway MCP endpoint.
+# Aegis Desktop auto-starts the Aegis Gateway widget by default.
+# If the endpoint is unavailable, open Aegis and start the Aegis Gateway widget
+# from Settings -> Widgets.
 
 [mcp_servers.aegis]
 url = "http://127.0.0.1:17321/mcp"

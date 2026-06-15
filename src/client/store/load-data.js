@@ -231,6 +231,9 @@ export default (Store) => {
     store.startAutoRunWidgets().catch(err => {
       console.error('Failed to start autorun widgets:', err)
     })
+    store.ensureAegisGatewayAutoStart().catch(err => {
+      console.error('Failed to ensure Aegis Gateway autostart:', err)
+    })
   }
   Store.prototype.initCommandLine = async function () {
     const opts = await window.pre.runGlobalAsync('initCommandLine')

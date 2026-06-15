@@ -11,12 +11,19 @@ const {
 } = require('../lib/aegis-gateway-client')
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..')
-const gatewayBinary = path.resolve(
-  repoRoot,
-  'target',
-  'debug',
-  process.platform === 'win32' ? 'aegis-gateway.exe' : 'aegis-gateway'
-)
+const gatewayBinaryName = process.platform === 'win32' ? 'aegis-gateway.exe' : 'aegis-gateway'
+
+function resolveGatewayBinary () {
+  const candidates = [
+    process.env.AEGIS_GATEWAY_BIN,
+    process.resourcesPath
+      ? path.resolve(process.resourcesPath, 'aegis-gateway', gatewayBinaryName)
+      : '',
+    path.resolve(repoRoot, 'target', 'release', gatewayBinaryName),
+    path.resolve(repoRoot, 'target', 'debug', gatewayBinaryName)
+  ].filter(Boolean)
+  return candidates.find(candidate => fs.existsSync(candidate))
+}
 
 const widgetInfo = {
   name: 'Aegis Gateway',
@@ -60,7 +67,7 @@ const widgetInfo = {
     {
       name: 'autoRun',
       type: 'boolean',
-      default: false,
+      default: true,
       description: 'Automatically start this Gateway when the app launches'
     }
   ]
@@ -192,7 +199,8 @@ class AegisGatewayWidget {
           '/api/v1/sessions',
           '/api/v1/commands',
           '/api/v1/approvals',
-          '/api/v1/audit/events'
+          '/api/v1/audit/events',
+          '/mcp'
         ].join('\n')
       }
     }
@@ -203,7 +211,8 @@ function resolveDefaultConfig (config = {}) {
   if (config.command) {
     return config
   }
-  if (fs.existsSync(gatewayBinary)) {
+  const gatewayBinary = resolveGatewayBinary()
+  if (gatewayBinary) {
     return {
       command: gatewayBinary,
       args: '',

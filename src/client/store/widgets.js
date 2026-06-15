@@ -113,4 +113,32 @@ export default Store => {
       }
     }
   }
+
+  Store.prototype.ensureAegisGatewayAutoStart = async function () {
+    const { store } = window
+    if (store._aegisGatewayAutoStartRunning) {
+      return
+    }
+    store._aegisGatewayAutoStartRunning = true
+    try {
+      const result = await store.runWidget('aegis-gateway', {})
+      if (!result || !result.instanceId) {
+        return
+      }
+      const exists = store.widgetInstances.some(item => item.id === result.instanceId)
+      if (exists) {
+        return
+      }
+      store.widgetInstances.push({
+        id: result.instanceId,
+        title: `aegis-gateway (${result.instanceId})`,
+        widgetId: 'aegis-gateway',
+        serverInfo: result.serverInfo,
+        config: {},
+        autoRun: true
+      })
+    } catch (err) {
+      console.error('Failed to autostart Aegis Gateway:', err)
+    }
+  }
 }

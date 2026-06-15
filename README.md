@@ -25,10 +25,27 @@ Aegis 是面向 AI Coding Agent 的安全远程终端工作台，基于 electerm
 
 ## 快速验证
 
+桌面端启动时会自动启动内置 `Aegis Gateway` widget，并监听：
+
+```text
+http://127.0.0.1:17321/mcp
+```
+
+Agent 侧可这样接入：
+
 ```bash
+codex mcp add aegis --url http://127.0.0.1:17321/mcp
+```
+
+开发或排错时也可以手动运行 Gateway：
+
+```bash
+npm run gateway:build
 npm run gateway:test
 npm run gateway
 ```
+
+打包版本会优先启动随包的 `aegis-gateway` 二进制；开发环境找不到二进制时会回退到 `cargo run -p aegis-gateway`。
 
 Gateway 启动后，可在另一个终端运行本地 smoke 检查：
 
