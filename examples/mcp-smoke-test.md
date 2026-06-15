@@ -9,6 +9,19 @@ Codex -> MCP -> Aegis Gateway -> policy / approval / audit
 It does not require a production server. For the first pass, the built-in
 `demo-nginx` host is enough to validate MCP, sessions, policy, and audit.
 
+## 0. Automated Gateway Preflight
+
+Before the manual MCP calls, you can run the local Gateway smoke script in a
+second terminal after Gateway starts:
+
+```bash
+npm run gateway:smoke
+```
+
+The script verifies `/health`, host sync, guarded policy, command
+classification, low-risk command queueing, high-risk approval creation, and
+JSONL audit export.
+
 ## 1. Start Gateway
 
 From the repository root:
